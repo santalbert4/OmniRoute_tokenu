@@ -61,6 +61,7 @@ Technical documentation for developers and contributors.
 How the system is put together — read these to understand the runtime, code layout, and resilience model.
 
 - [ARCHITECTURE.md](architecture/ARCHITECTURE.md) — high-level system architecture (request pipeline, layers, modules).
+- [TOKENU_CORE_EXTRACTION_ARCHITECTURE.md](architecture/TOKENU_CORE_EXTRACTION_ARCHITECTURE.md) — TokenU/Core commercial boundary, protocol extraction map, and frozen Phase 2.0–2.2 decisions.
 - [CODEBASE_DOCUMENTATION.md](architecture/CODEBASE_DOCUMENTATION.md) — engineering reference for the codebase.
 - [REPOSITORY_MAP.md](architecture/REPOSITORY_MAP.md) — directory-by-directory navigation guide.
 - [AUTHZ_GUIDE.md](architecture/AUTHZ_GUIDE.md) — authorization pipeline (route classifier + policy engine).
