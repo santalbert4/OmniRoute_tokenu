@@ -66,7 +66,6 @@ OmniRoute must remain replaceable behind TokenU-owned contracts.
 - low-level provider execution
 - streaming transport mechanics
 - explicitly approved provider technical quirks
-- explicitly configured same-target technical retry
 - low-level timing and transport telemetry
 
 ### Core must not own
@@ -78,6 +77,7 @@ OmniRoute must remain replaceable behind TokenU-owned contracts.
 - public API authorization
 - cross-provider routing authority
 - cross-provider fallback authority
+- retry authority, including same-target retries
 
 ---
 
@@ -962,12 +962,12 @@ The final TypeScript shape is not frozen yet, but its responsibility boundary is
 Conceptually, CoreExecutionRequest contains:
 
 - requestId
+- attemptId
 - ExecutionTarget
 - normalized request payload
 - client response protocol
 - stream flag
 - timeout policy
-- explicitly allowed same-target retry policy
 - resolved translation policies
 - resolved continuity constraints
 
@@ -978,9 +978,14 @@ CoreExecutionRequest must not contain:
 - arbitrary client Authorization headers
 - arbitrary upstream base URLs
 - cross-provider fallback logic
+- retry orchestration or retry policy
 - TokenScore logic
 
-Cross-provider execution remains the responsibility of the TokenU Plan Runner.
+Retry and cross-provider execution remain the responsibility of the TokenU Plan Runner.
+
+Each SingleTargetAdapter invocation performs exactly one upstream attempt.
+
+The Plan Runner assigns a unique attemptId before each invocation so repeated attempts against the same ExecutionTarget remain independently accountable.
 
 ---
 
