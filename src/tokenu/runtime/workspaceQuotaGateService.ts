@@ -14,7 +14,7 @@ export class WorkspaceQuotaGateService {
     period: string,
     plan: WorkspacePlan
   ): Promise<WorkspaceQuotaDecision> {
-    const cost = await this.costQuotaService.enforce(plan);
+    const cost = await this.costQuotaService.enforce(workspaceId, period, plan);
 
     if (!cost.allowed) {
       return {

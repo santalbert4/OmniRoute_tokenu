@@ -1,6 +1,8 @@
 export interface WorkspaceSpendSummary {
   readonly workspaceId: string;
 
+  readonly period: string;
+
   readonly executionCount: number;
 
   readonly totalCost: number;

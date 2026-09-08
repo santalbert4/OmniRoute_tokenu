@@ -5,13 +5,20 @@ import type { QuotaEnforcementResult } from "@/tokenu/contracts/quotaEnforcement
 export class QuotaEnforcementService {
   constructor(private readonly spendAggregator: WorkspaceSpendAggregatorService) {}
 
-  async enforce(plan: WorkspacePlan): Promise<QuotaEnforcementResult> {
-    const summary = await this.spendAggregator.summarize({
-      workspaceId: plan.id,
-      monthlyLimit: plan.monthlyCostLimit,
-      currentSpend: 0,
-      currency: plan.currency,
-    });
+  async enforce(
+    workspaceId: string,
+    period: string,
+    plan: WorkspacePlan
+  ): Promise<QuotaEnforcementResult> {
+    const summary = await this.spendAggregator.summarize(
+      {
+        workspaceId,
+        monthlyLimit: plan.monthlyCostLimit,
+        currentSpend: 0,
+        currency: plan.currency,
+      },
+      period
+    );
 
     const remainingCost = Math.max(plan.monthlyCostLimit - summary.totalCost, 0);
 
