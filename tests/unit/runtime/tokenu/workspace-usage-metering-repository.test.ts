@@ -9,7 +9,7 @@ test("workspace usage metering stores usage snapshot", async () => {
   await repository.save({
     workspaceId: "workspace-1",
     period: "2026-09",
-    requestCount: 10,
+    meteredExecutionCount: 10,
     inputTokens: 5000,
     outputTokens: 2500,
     estimatedCost: 0.25,
@@ -17,7 +17,7 @@ test("workspace usage metering stores usage snapshot", async () => {
 
   const usage = await repository.get("workspace-1", "2026-09");
 
-  assert.equal(usage?.requestCount, 10);
+  assert.equal(usage?.meteredExecutionCount, 10);
 
   assert.equal(usage?.estimatedCost, 0.25);
 });

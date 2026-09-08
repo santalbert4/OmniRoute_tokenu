@@ -3,7 +3,7 @@ export interface WorkspaceUsageMetering {
 
   readonly period: string;
 
-  readonly requestCount: number;
+  readonly meteredExecutionCount: number;
 
   readonly inputTokens: number;
 

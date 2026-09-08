@@ -17,7 +17,7 @@ export class WorkspaceUsageMeteringService {
 
       period,
 
-      requestCount: (existing?.requestCount ?? 0) + 1,
+      meteredExecutionCount: (existing?.meteredExecutionCount ?? 0) + 1,
 
       inputTokens: (existing?.inputTokens ?? 0) + inputTokens,
 

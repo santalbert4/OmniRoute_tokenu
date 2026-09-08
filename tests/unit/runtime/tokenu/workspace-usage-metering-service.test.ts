@@ -15,7 +15,7 @@ test("workspace usage metering accumulates repeated usage", async () => {
 
   const usage = await repository.get("workspace-1", "2026-09");
 
-  assert.equal(usage?.requestCount, 2);
+  assert.equal(usage?.meteredExecutionCount, 2);
 
   assert.equal(usage?.inputTokens, 3000);
 
