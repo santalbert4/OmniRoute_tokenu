@@ -1,6 +1,7 @@
 import type { ExecutionUsageRecord } from "@/tokenu/contracts/executionUsageRecord";
 import type { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
 import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
+import type { CostLedgerRecordResult } from "@/tokenu/contracts/costLedgerRecordResult";
 
 export class CostLedgerService {
   constructor(
@@ -13,11 +14,15 @@ export class CostLedgerService {
       workspaceId: string;
       id: string;
     }
-  ): Promise<void> {
+  ): Promise<CostLedgerRecordResult> {
     const cost = await this.costCalculator.calculate(record);
 
     if (!cost) {
-      return;
+      return {
+        recorded: false,
+        cost: 0,
+        entryId: record.id,
+      };
     }
 
     await this.ledgerRepository.append({
@@ -33,5 +38,11 @@ export class CostLedgerService {
       cost: cost.totalCost,
       createdAt: record.recordedAt,
     });
+
+    return {
+      recorded: true,
+      cost: cost.totalCost,
+      entryId: record.id,
+    };
   }
 }
