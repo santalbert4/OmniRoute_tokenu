@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "strictNullChecks": true,
+    "noImplicitAny": false,
+    "noEmit": true,
+    "incremental": false,
+    "types": ["node"]
+  },
+  "include": ["src/tokenu/**/*.ts", "tests/unit/**/tokenu/**/*.ts", "tests/unit/**/*tokenu*.ts"],
+  "exclude": ["node_modules", ".next", ".build", "dist", "coverage"]
+}

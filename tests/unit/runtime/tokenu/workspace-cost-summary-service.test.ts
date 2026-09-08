@@ -10,8 +10,8 @@ test("workspace cost summary aggregates provider usage", () => {
     {
       workspaceId: "workspace-1",
       period: "2026-09",
-      provider: "openai",
-      model: "gpt-5",
+      providerId: "openai",
+      modelId: "gpt-5",
       requestCount: 10,
       inputTokens: 5000,
       outputTokens: 2000,
@@ -20,8 +20,8 @@ test("workspace cost summary aggregates provider usage", () => {
     {
       workspaceId: "workspace-1",
       period: "2026-09",
-      provider: "google",
-      model: "gemini-3.7-flash",
+      providerId: "google",
+      modelId: "gemini-3.7-flash",
       requestCount: 5,
       inputTokens: 3000,
       outputTokens: 1000,

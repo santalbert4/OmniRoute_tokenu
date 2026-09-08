@@ -10,8 +10,8 @@ test("provider usage aggregation returns stored provider usage", async () => {
   await repository.save({
     workspaceId: "workspace-1",
     period: "2026-09",
-    provider: "openai",
-    model: "gpt-5",
+    providerId: "openai",
+    modelId: "gpt-5",
     requestCount: 20,
     inputTokens: 10000,
     outputTokens: 5000,

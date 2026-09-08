@@ -7,9 +7,9 @@ export class ProviderUsageAggregationService {
   async getUsage(
     workspaceId: string,
     period: string,
-    provider: string,
-    model: string
+    providerId: string,
+    modelId: string
   ): Promise<ProviderUsageRecord | null> {
-    return this.repository.get(workspaceId, period, provider, model);
+    return this.repository.get(workspaceId, period, providerId, modelId);
   }
 }

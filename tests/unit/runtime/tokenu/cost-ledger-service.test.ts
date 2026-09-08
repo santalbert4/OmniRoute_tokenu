@@ -28,6 +28,7 @@ test("cost ledger service records execution cost", async () => {
     id: "entry-1",
     workspaceId: "workspace-1",
     requestId: "request-1",
+    attemptId: "attempt-1",
     providerId: "groq",
     modelId: "llama-test",
     usage: {
@@ -43,5 +44,5 @@ test("cost ledger service records execution cost", async () => {
 
   const total = await ledgerRepository.totalCost("workspace-1");
 
-  assert.equal(total, 0.0006);
+  assert.ok(Math.abs(total - 0.0006) < 1e-12);
 });

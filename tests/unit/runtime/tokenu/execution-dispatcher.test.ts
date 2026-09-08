@@ -15,7 +15,7 @@ const target = {
   modelOfferingId: "groq-gpt-oss-20b",
   upstreamModelId: "openai/gpt-oss-20b",
   connectionId: "groq-test",
-  credentialMode: "platform-managed",
+  credentialMode: "TOKENU_MANAGED",
   technicalProfileId: "groq-profile",
   adapterId: "groq-official-openai-v1",
   endpointProfileId: "groq-endpoint",

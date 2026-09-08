@@ -3,9 +3,9 @@ export interface ProviderUsageRecord {
 
   readonly period: string;
 
-  readonly provider: string;
+  readonly providerId: string;
 
-  readonly model: string;
+  readonly modelId: string;
 
   readonly requestCount: number;
 

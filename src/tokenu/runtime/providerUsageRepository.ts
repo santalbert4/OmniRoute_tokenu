@@ -4,8 +4,8 @@ export interface ProviderUsageRepository {
   get(
     workspaceId: string,
     period: string,
-    provider: string,
-    model: string
+    providerId: string,
+    modelId: string
   ): Promise<ProviderUsageRecord | null>;
 
   save(usage: ProviderUsageRecord): Promise<void>;

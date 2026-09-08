@@ -29,12 +29,18 @@ const EMPTY_USAGE: NormalizedUsage = {
   totalTokens: null,
 };
 
-function asJsonObject(value: JsonValue | undefined): { readonly [key: string]: JsonValue } | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return null;
-  }
+type JsonObject = {
+  readonly [key: string]: JsonValue;
+};
 
-  return value;
+function isJsonObject(value: JsonValue | undefined): value is JsonObject {
+  return (
+    value !== undefined && value !== null && typeof value === "object" && !Array.isArray(value)
+  );
+}
+
+function asJsonObject(value: JsonValue | undefined): JsonObject | null {
+  return isJsonObject(value) ? value : null;
 }
 
 function numberOrNull(value: JsonValue | undefined): number | null {

@@ -9,8 +9,8 @@ test("provider usage repository stores usage by provider and model", async () =>
   await repository.save({
     workspaceId: "workspace-1",
     period: "2026-09",
-    provider: "openai",
-    model: "gpt-5",
+    providerId: "openai",
+    modelId: "gpt-5",
     requestCount: 10,
     inputTokens: 5000,
     outputTokens: 2000,

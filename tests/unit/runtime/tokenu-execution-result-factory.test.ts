@@ -8,7 +8,7 @@ const target = {
   modelOfferingId: "test-model",
   upstreamModelId: "test-upstream-model",
   connectionId: "test-connection",
-  credentialMode: "platform-managed",
+  credentialMode: "TOKENU_MANAGED",
   technicalProfileId: "test-profile",
   adapterId: "test-adapter",
   endpointProfileId: "test-endpoint",

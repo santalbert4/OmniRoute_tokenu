@@ -34,7 +34,9 @@ test("execution cost calculator calculates provider cost", async () => {
     recordedAt: "2026-09-08T12:00:00.000Z",
   });
 
-  assert.equal(cost?.currency, "USD");
+  assert.ok(cost);
 
-  assert.equal(cost?.totalCost, 0.0006);
+  assert.equal(cost.currency, "USD");
+
+  assert.ok(Math.abs(cost.totalCost - 0.0006) < 1e-12);
 });

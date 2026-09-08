@@ -6,19 +6,19 @@ export class ProviderUsageMeteringService {
   async record(
     workspaceId: string,
     period: string,
-    provider: string,
-    model: string,
+    providerId: string,
+    modelId: string,
     inputTokens: number,
     outputTokens: number,
     estimatedCost: number
   ): Promise<void> {
-    const existing = await this.repository.get(workspaceId, period, provider, model);
+    const existing = await this.repository.get(workspaceId, period, providerId, modelId);
 
     await this.repository.save({
       workspaceId,
       period,
-      provider,
-      model,
+      providerId,
+      modelId,
 
       requestCount: (existing?.requestCount ?? 0) + 1,
 
