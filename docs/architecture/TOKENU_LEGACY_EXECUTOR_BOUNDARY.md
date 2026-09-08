@@ -12,7 +12,7 @@ The existing BaseExecutor is an implementation source, not the TokenU execution 
 
 # 1. Governing invariant
 
-One SingleTargetAdapter.execute() invocation corresponds to exactly one attemptId and exactly one upstream network attempt.
+One SingleTargetAdapter.execute() invocation corresponds to exactly one attemptId and exactly one upstream execution attempt. An execution attempt may terminate before network dispatch, but it must perform at most one provider network dispatch.
 
 The adapter must never perform a second upstream request as a retry, fallback, downgrade replay or alternate-endpoint attempt.
 

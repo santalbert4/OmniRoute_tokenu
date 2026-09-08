@@ -42,7 +42,7 @@ Each `SingleTargetAdapter` invocation performs exactly one upstream attempt.
 
 The adapter must not retry, select another provider/model, execute TokenScore, re-evaluate commercial policy, discover another target or accept arbitrary upstream endpoints.
 
-This preserves the accounting invariant: `client_requests = 1` and `upstream_attempts = N`.
+This preserves the accounting invariant: `client_requests = 1` and `upstream_attempts = N`. An `upstream_attempt` is one logical provider execution attempt identified by one `attemptId`; it may terminate before network dispatch, but it may perform at most one provider network dispatch.
 
 ---
 

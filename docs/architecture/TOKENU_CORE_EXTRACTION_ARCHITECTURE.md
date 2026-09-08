@@ -88,6 +88,8 @@ TokenU must distinguish the client request from provider execution attempts.
     client_requests = 1
     upstream_attempts = N
 
+An upstream_attempt is one logical provider execution attempt identified by one attemptId. It may terminate before provider network dispatch, but it may perform at most one provider network dispatch.
+
 Retries and fallback attempts must never silently become additional client requests.
 
 ---
@@ -1002,11 +1004,11 @@ Conceptually it contains:
 - approved technical adapter reference
 - approved endpoint/profile reference
 
-The target must be fully resolved before entering the SingleTargetAdapter.
+The target and trusted runtime dependencies must be resolved and validated before entering the SingleTargetAdapter.
 
-The SingleTargetAdapter resolves the exact credential just in time from the trusted secret layer.
+Before attemptId creation, TokenU resolves the approved adapter factory, endpoint profile, exact credential and technical model profile through fail-closed runtime boundaries, then binds them to the ExecutionTarget.
 
-It must not discover alternative providers or models.
+The bound SingleTargetAdapter must not resolve alternative credentials, endpoints, providers or models.
 
 One ExecutionTarget represents one upstream target, not a routing strategy.
 
