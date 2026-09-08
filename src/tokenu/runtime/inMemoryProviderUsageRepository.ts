@@ -15,6 +15,12 @@ export class InMemoryProviderUsageRepository implements ProviderUsageRepository 
     return this.usage.get(key) ?? null;
   }
 
+  async list(workspaceId: string, period: string): Promise<readonly ProviderUsageRecord[]> {
+    return Array.from(this.usage.values()).filter(
+      (usage) => usage.workspaceId === workspaceId && usage.period === period
+    );
+  }
+
   async save(usage: ProviderUsageRecord): Promise<void> {
     const key = `${usage.workspaceId}:${usage.period}:${usage.providerId}:${usage.modelId}`;
 

@@ -4,6 +4,10 @@ import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepo
 export class ProviderUsageAggregationService {
   constructor(private readonly repository: ProviderUsageRepository) {}
 
+  async listUsage(workspaceId: string, period: string): Promise<readonly ProviderUsageRecord[]> {
+    return this.repository.list(workspaceId, period);
+  }
+
   async getUsage(
     workspaceId: string,
     period: string,

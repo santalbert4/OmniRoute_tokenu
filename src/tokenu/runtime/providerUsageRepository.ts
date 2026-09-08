@@ -8,5 +8,7 @@ export interface ProviderUsageRepository {
     modelId: string
   ): Promise<ProviderUsageRecord | null>;
 
+  list(workspaceId: string, period: string): Promise<readonly ProviderUsageRecord[]>;
+
   save(usage: ProviderUsageRecord): Promise<void>;
 }
