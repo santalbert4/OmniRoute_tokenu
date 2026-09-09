@@ -6,6 +6,12 @@
  *
  * This is technical usage only. Billable usage and monetary amount are
  * calculated separately by the TokenU Billing Engine.
+ *
+ * Normalization invariant:
+ * - inputTokens is the total input/prompt token count when known.
+ * - cacheReadTokens and cacheWriteTokens are subsets of inputTokens when known.
+ * - null means unknown and must not be silently interpreted as zero by
+ *   authoritative billing when a differentiated cache price applies.
  */
 export interface NormalizedUsage {
   readonly inputTokens: number | null;

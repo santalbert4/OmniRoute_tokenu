@@ -1,6 +1,6 @@
 import { generateRequestId } from "@/shared/utils/requestId";
-import { getTokenURuntimeComposition } from "@/tokenu/runtime/tokenuRuntimeComposition";
 
+import { getTokenUApiRuntimeComposition } from "../productionRuntime";
 import { handleTokenUExecute } from "./executeHandler";
 
 function currentUtcPeriod(): string {
@@ -17,7 +17,7 @@ export async function handleResolvedTokenUExecute(
   request: Request,
   workspaceId: string
 ): Promise<Response> {
-  const runtime = getTokenURuntimeComposition();
+  const runtime = await getTokenUApiRuntimeComposition();
 
   return handleTokenUExecute(request, workspaceId, {
     publicExecutionResolver: runtime.publicExecutionResolver,

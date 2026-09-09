@@ -120,6 +120,38 @@ export function prepareGroqRequest(input: {
 
   next.messages = sanitizedMessages;
 
+  const tools = next.tools;
+
+  if (tools !== undefined && tools !== null) {
+    if (!Array.isArray(tools)) {
+      return {
+        ok: false,
+        code: "invalid-tools",
+        message: "Groq tools must be an array of function tools.",
+      };
+    }
+
+    for (const tool of tools) {
+      if (!isJsonObject(tool) || tool.type !== "function") {
+        return {
+          ok: false,
+          code: "unsupported-tool-type",
+          message: "TokenU Groq production routes allow function tools only.",
+        };
+      }
+    }
+
+    const responseFormat = isJsonObject(next.response_format) ? next.response_format : null;
+
+    if (tools.length > 0 && responseFormat?.type === "json_schema") {
+      return {
+        ok: false,
+        code: "structured-output-with-tools-not-supported",
+        message: "Groq Structured Outputs cannot be combined with tool use on this route.",
+      };
+    }
+  }
+
   if (Object.prototype.hasOwnProperty.call(next, "stream_options")) {
     return {
       ok: false,

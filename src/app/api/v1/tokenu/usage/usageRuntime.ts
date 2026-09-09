@@ -1,12 +1,11 @@
-import { getTokenURuntimeComposition } from "@/tokenu/runtime/tokenuRuntimeComposition";
-
+import { getTokenUApiRuntimeComposition } from "../productionRuntime";
 import { handleTokenUUsageGet } from "./usageHandler";
 
 export async function handleResolvedTokenUUsageGet(
   request: Request,
   workspaceId: string
 ): Promise<Response> {
-  const runtime = getTokenURuntimeComposition();
+  const runtime = await getTokenUApiRuntimeComposition();
 
   return handleTokenUUsageGet(request, workspaceId, runtime.workspaceUsageQueryService);
 }

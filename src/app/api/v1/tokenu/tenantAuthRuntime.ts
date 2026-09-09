@@ -1,6 +1,6 @@
 import { getApiKeyMetadata, validateApiKey } from "@/lib/db/apiKeys";
-import { getTokenURuntimeComposition } from "@/tokenu/runtime/tokenuRuntimeComposition";
 
+import { getTokenUApiRuntimeComposition } from "./productionRuntime";
 import { resolveTokenUTenantAuth, type TokenUTenantAuthResult } from "./tenantAuth";
 
 /**
@@ -13,7 +13,7 @@ import { resolveTokenUTenantAuth, type TokenUTenantAuthResult } from "./tenantAu
 export async function resolveTokenUTenantAuthFromRuntime(
   request: Request
 ): Promise<TokenUTenantAuthResult> {
-  const runtime = getTokenURuntimeComposition();
+  const runtime = await getTokenUApiRuntimeComposition();
 
   return resolveTokenUTenantAuth(request, {
     validateApiKey,

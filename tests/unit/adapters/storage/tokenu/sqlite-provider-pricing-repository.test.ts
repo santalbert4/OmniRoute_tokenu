@@ -35,6 +35,8 @@ function createDatabase(): RawDatabase {
 
   db.exec(fs.readFileSync("src/lib/db/migrations/177_tokenu_provider_pricing.sql", "utf8"));
 
+  db.exec(fs.readFileSync("src/lib/db/migrations/180_tokenu_provider_pricing_cache.sql", "utf8"));
+
   return db;
 }
 

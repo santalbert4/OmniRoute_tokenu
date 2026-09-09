@@ -12,6 +12,8 @@ interface ProviderPricingRow {
   readonly currency: string;
   readonly input_token_price_per_million_micros: number;
   readonly output_token_price_per_million_micros: number;
+  readonly cache_read_token_price_per_million_micros: number | null;
+  readonly cache_write_token_price_per_million_micros: number | null;
   readonly effective_from: string;
 }
 
@@ -21,6 +23,10 @@ function isNonEmptyString(value: unknown): value is string {
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+function isNullableNonNegativeSafeInteger(value: unknown): value is number | null {
+  return value === null || isNonNegativeSafeInteger(value);
 }
 
 function canonicalTimestamp(value: string): string {
@@ -46,6 +52,8 @@ function isProviderPricingRow(value: unknown): value is ProviderPricingRow {
     isNonEmptyString(row.currency) &&
     isNonNegativeSafeInteger(row.input_token_price_per_million_micros) &&
     isNonNegativeSafeInteger(row.output_token_price_per_million_micros) &&
+    isNullableNonNegativeSafeInteger(row.cache_read_token_price_per_million_micros) &&
+    isNullableNonNegativeSafeInteger(row.cache_write_token_price_per_million_micros) &&
     isNonEmptyString(row.effective_from)
   );
 }
@@ -57,6 +65,20 @@ function toPricing(row: ProviderPricingRow): ProviderPricing {
     currency: row.currency,
     inputTokenPricePerMillion: fromMoneyMicros(row.input_token_price_per_million_micros),
     outputTokenPricePerMillion: fromMoneyMicros(row.output_token_price_per_million_micros),
+    ...(row.cache_read_token_price_per_million_micros === null
+      ? {}
+      : {
+          cacheReadTokenPricePerMillion: fromMoneyMicros(
+            row.cache_read_token_price_per_million_micros
+          ),
+        }),
+    ...(row.cache_write_token_price_per_million_micros === null
+      ? {}
+      : {
+          cacheWriteTokenPricePerMillion: fromMoneyMicros(
+            row.cache_write_token_price_per_million_micros
+          ),
+        }),
     effectiveFrom: row.effective_from,
   };
 }
@@ -75,9 +97,11 @@ export class SqliteProviderPricingRepository implements ProviderPricingRepositor
            currency,
            input_token_price_per_million_micros,
            output_token_price_per_million_micros,
+           cache_read_token_price_per_million_micros,
+           cache_write_token_price_per_million_micros,
            effective_from
          )
-         VALUES (?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(
            provider_id,
            model_id,
@@ -89,7 +113,11 @@ export class SqliteProviderPricingRepository implements ProviderPricingRepositor
            input_token_price_per_million_micros =
              excluded.input_token_price_per_million_micros,
            output_token_price_per_million_micros =
-             excluded.output_token_price_per_million_micros`
+             excluded.output_token_price_per_million_micros,
+           cache_read_token_price_per_million_micros =
+             excluded.cache_read_token_price_per_million_micros,
+           cache_write_token_price_per_million_micros =
+             excluded.cache_write_token_price_per_million_micros`
       )
       .run(
         pricing.providerId,
@@ -97,6 +125,12 @@ export class SqliteProviderPricingRepository implements ProviderPricingRepositor
         pricing.currency,
         toMoneyMicros(pricing.inputTokenPricePerMillion),
         toMoneyMicros(pricing.outputTokenPricePerMillion),
+        pricing.cacheReadTokenPricePerMillion == null
+          ? null
+          : toMoneyMicros(pricing.cacheReadTokenPricePerMillion),
+        pricing.cacheWriteTokenPricePerMillion == null
+          ? null
+          : toMoneyMicros(pricing.cacheWriteTokenPricePerMillion),
         effectiveFrom
       );
   }
@@ -109,6 +143,8 @@ export class SqliteProviderPricingRepository implements ProviderPricingRepositor
            currency,
            input_token_price_per_million_micros,
            output_token_price_per_million_micros,
+           cache_read_token_price_per_million_micros,
+           cache_write_token_price_per_million_micros,
            effective_from
          FROM tokenu_provider_pricing
          ORDER BY
@@ -143,6 +179,8 @@ export class SqliteProviderPricingRepository implements ProviderPricingRepositor
            currency,
            input_token_price_per_million_micros,
            output_token_price_per_million_micros,
+           cache_read_token_price_per_million_micros,
+           cache_write_token_price_per_million_micros,
            effective_from
          FROM tokenu_provider_pricing
          WHERE provider_id = ?
