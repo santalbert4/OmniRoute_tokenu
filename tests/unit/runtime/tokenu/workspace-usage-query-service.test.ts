@@ -25,7 +25,7 @@ test("workspace usage query composes authoritative usage sources", async () => {
 
   const providerRepository = new InMemoryProviderUsageRepository();
 
-  await planRepository.save("plan-pro", {
+  await planRepository.save({
     id: "plan-pro",
     tier: "pro",
     monthlyCostLimit: 100,

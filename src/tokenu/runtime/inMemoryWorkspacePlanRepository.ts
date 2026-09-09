@@ -4,11 +4,11 @@ import type { WorkspacePlanRepository } from "@/tokenu/runtime/workspacePlanRepo
 export class InMemoryWorkspacePlanRepository implements WorkspacePlanRepository {
   private readonly plans = new Map<string, WorkspacePlan>();
 
-  async get(workspaceId: string): Promise<WorkspacePlan | null> {
-    return this.plans.get(workspaceId) ?? null;
+  async get(planId: string): Promise<WorkspacePlan | null> {
+    return this.plans.get(planId) ?? null;
   }
 
-  async save(workspaceId: string, plan: WorkspacePlan): Promise<void> {
-    this.plans.set(workspaceId, plan);
+  async save(plan: WorkspacePlan): Promise<void> {
+    this.plans.set(plan.id, plan);
   }
 }

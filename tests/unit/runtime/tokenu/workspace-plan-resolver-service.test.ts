@@ -10,7 +10,7 @@ test("workspace plan resolver resolves assigned workspace plan", async () => {
 
   const planRepository = new InMemoryWorkspacePlanRepository();
 
-  await planRepository.save("pro", {
+  await planRepository.save({
     id: "pro",
     tier: "pro",
     monthlyCostLimit: 50,

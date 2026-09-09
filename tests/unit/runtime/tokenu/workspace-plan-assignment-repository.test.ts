@@ -18,3 +18,25 @@ test("workspace plan assignment stores workspace plan relation", async () => {
 
   assert.equal(assignment?.workspaceId, "workspace-1");
 });
+
+test("workspace plan assignment can replace the current workspace plan", async () => {
+  const repository = new InMemoryWorkspacePlanAssignmentRepository();
+
+  await repository.save({
+    workspaceId: "workspace-1",
+    planId: "starter",
+    assignedAt: "2026-09-08T12:00:00.000Z",
+  });
+
+  await repository.save({
+    workspaceId: "workspace-1",
+    planId: "pro",
+    assignedAt: "2026-09-09T12:00:00.000Z",
+  });
+
+  const assignment = await repository.get("workspace-1");
+
+  assert.equal(assignment?.planId, "pro");
+
+  assert.equal(assignment?.assignedAt, "2026-09-09T12:00:00.000Z");
+});
