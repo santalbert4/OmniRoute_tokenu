@@ -30,12 +30,15 @@ import type { ProviderPricingRepository } from "@/tokenu/runtime/providerPricing
 import { NullSecretResolver } from "@/tokenu/runtime/nullSecretResolver";
 import { ProviderUsageAggregationService } from "@/tokenu/runtime/providerUsageAggregationService";
 import { ProviderUsageMeteringService } from "@/tokenu/runtime/providerUsageMeteringService";
+import { PublicExecutionResolver } from "@/tokenu/runtime/publicExecutionResolver";
+import type { PublicExecutionRouteRegistry } from "@/tokenu/runtime/publicExecutionRouteRegistry";
 import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepository";
 import { QuotaEnforcementService } from "@/tokenu/runtime/quotaEnforcementService";
 import { RequestAdmissionService } from "@/tokenu/runtime/requestAdmissionService";
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
 import type { SecretResolver } from "@/tokenu/runtime/secretResolver";
 import { StaticEndpointProfileRegistry } from "@/tokenu/runtime/staticEndpointProfileRegistry";
+import { StaticPublicExecutionRouteRegistry } from "@/tokenu/runtime/staticPublicExecutionRouteRegistry";
 import { StaticTechnicalModelProfileRegistry } from "@/tokenu/runtime/staticTechnicalModelProfileRegistry";
 import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutionEventSinkFactory";
 import { TenantExecutionOrchestrator } from "@/tokenu/runtime/tenantExecutionOrchestrator";
@@ -71,6 +74,12 @@ export interface TokenURuntimeCompositionOptions {
    */
   readonly endpointProfileRegistry?: EndpointProfileRegistry;
   readonly technicalModelProfileRegistry?: TechnicalModelProfileRegistry;
+
+  /**
+   * Reviewed mapping from public TokenU model ids to exact internal execution
+   * routes. Defaults to an empty fail-closed registry.
+   */
+  readonly publicExecutionRouteRegistry?: PublicExecutionRouteRegistry;
 
   /**
    * Explicit adapter registry and retry policy overrides, primarily useful for
@@ -116,6 +125,10 @@ export interface TokenURuntimeComposition {
   readonly endpointProfileRegistry: EndpointProfileRegistry;
 
   readonly technicalModelProfileRegistry: TechnicalModelProfileRegistry;
+
+  readonly publicExecutionRouteRegistry: PublicExecutionRouteRegistry;
+
+  readonly publicExecutionResolver: PublicExecutionResolver;
 
   readonly adapterFactoryRegistry: TokenUAdapterFactoryRegistry;
 
@@ -197,6 +210,11 @@ export function createTokenURuntimeComposition(
 
   const technicalModelProfileRegistry =
     options.technicalModelProfileRegistry ?? new StaticTechnicalModelProfileRegistry([]);
+
+  const publicExecutionRouteRegistry =
+    options.publicExecutionRouteRegistry ?? new StaticPublicExecutionRouteRegistry([]);
+
+  const publicExecutionResolver = new PublicExecutionResolver(publicExecutionRouteRegistry);
 
   const adapterFactoryRegistry =
     options.adapterFactoryRegistry ?? new DefaultAdapterFactoryRegistry();
@@ -288,6 +306,8 @@ export function createTokenURuntimeComposition(
     secretResolver,
     endpointProfileRegistry,
     technicalModelProfileRegistry,
+    publicExecutionRouteRegistry,
+    publicExecutionResolver,
     adapterFactoryRegistry,
     executionDependencyResolver,
     executionDispatcher,
