@@ -17,6 +17,8 @@ interface RawStatement {
 interface RawDatabase {
   exec(sql: string): void;
   prepare(sql: string): RawStatement;
+  transaction<T>(fn: (...args: unknown[]) => T): (...args: unknown[]) => T;
+
   close(): void;
 }
 

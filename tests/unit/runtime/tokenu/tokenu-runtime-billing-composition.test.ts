@@ -33,8 +33,10 @@ function createDatabase(): RawDatabase {
 
   for (const migration of [
     "173_tokenu_workspace_identity.sql",
+    "175_tokenu_usage_metering.sql",
     "176_tokenu_cost_ledger.sql",
     "177_tokenu_provider_pricing.sql",
+    "178_tokenu_usage_projection_attempts.sql",
   ]) {
     db.exec(fs.readFileSync(`src/lib/db/migrations/${migration}`, "utf8"));
   }
@@ -244,4 +246,36 @@ test("TokenU runtime tenant event pipeline bills through persistent composition"
   assert.equal(entries[0]?.attemptId, "attempt-pipeline");
 
   assert.ok(Math.abs((entries[0]?.cost ?? 0) - 0.002) < 1e-12);
+
+  const workspaceUsage = await runtime.workspaceUsageMeteringRepository.get(
+    "workspace-pipeline",
+    "2026-09"
+  );
+
+  assert.deepEqual(workspaceUsage, {
+    workspaceId: "workspace-pipeline",
+    period: "2026-09",
+    meteredExecutionCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    estimatedCost: 0.002,
+  });
+
+  const providerUsage = await runtime.providerUsageRepository.get(
+    "workspace-pipeline",
+    "2026-09",
+    "groq",
+    "llama-pipeline-test"
+  );
+
+  assert.deepEqual(providerUsage, {
+    workspaceId: "workspace-pipeline",
+    period: "2026-09",
+    providerId: "groq",
+    modelId: "llama-pipeline-test",
+    requestCount: 1,
+    inputTokens: 1000,
+    outputTokens: 500,
+    estimatedCost: 0.002,
+  });
 });

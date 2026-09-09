@@ -1,6 +1,7 @@
 import { SqliteCostLedgerRepository } from "@/tokenu/adapters/storage/sqliteCostLedgerRepository";
 import { SqliteProviderPricingRepository } from "@/tokenu/adapters/storage/sqliteProviderPricingRepository";
 import { SqliteProviderUsageRepository } from "@/tokenu/adapters/storage/sqliteProviderUsageRepository";
+import { SqliteUsageProjectionRepository } from "@/tokenu/adapters/storage/sqliteUsageProjectionRepository";
 import { SqliteWorkspacePlanAssignmentRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePlanAssignmentRepository";
 import { SqliteWorkspacePlanRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePlanRepository";
 import { SqliteWorkspacePrincipalRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePrincipalRepository";
@@ -23,6 +24,8 @@ import { RequestAdmissionService } from "@/tokenu/runtime/requestAdmissionServic
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
 import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
 import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutionEventSinkFactory";
+import type { UsageProjectionRepository } from "@/tokenu/runtime/usageProjectionRepository";
+import { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
 import type { WorkspacePlanRepository } from "@/tokenu/runtime/workspacePlanRepository";
 import { WorkspacePlanResolverService } from "@/tokenu/runtime/workspacePlanResolverService";
@@ -59,6 +62,10 @@ export interface TokenURuntimeComposition {
   readonly executionCostCalculator: ExecutionCostCalculator;
 
   readonly costLedgerService: CostLedgerService;
+
+  readonly usageProjectionRepository: UsageProjectionRepository;
+
+  readonly usageProjectionService: UsageProjectionService;
 
   readonly tenantExecutionEventSinkFactory: TenantExecutionEventSinkFactory;
 
@@ -110,7 +117,17 @@ export function createTokenURuntimeComposition(
 
   const costLedgerService = new CostLedgerService(executionCostCalculator, costLedgerRepository);
 
-  const tenantExecutionEventSinkFactory = new TenantExecutionEventSinkFactory(costLedgerService);
+  const usageProjectionRepository = new SqliteUsageProjectionRepository(database);
+
+  const usageProjectionService = new UsageProjectionService(
+    executionCostCalculator,
+    usageProjectionRepository
+  );
+
+  const tenantExecutionEventSinkFactory = new TenantExecutionEventSinkFactory(
+    costLedgerService,
+    usageProjectionService
+  );
 
   const workspacePlanResolverService = new WorkspacePlanResolverService(
     workspacePlanAssignmentRepository,
@@ -168,6 +185,8 @@ export function createTokenURuntimeComposition(
     providerPricingRepository,
     executionCostCalculator,
     costLedgerService,
+    usageProjectionRepository,
+    usageProjectionService,
     tenantExecutionEventSinkFactory,
     workspacePlanResolverService,
     workspaceSpendAggregatorService,

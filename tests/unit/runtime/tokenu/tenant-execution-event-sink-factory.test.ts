@@ -6,6 +6,9 @@ import { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculato
 import { InMemoryCostLedgerRepository } from "@/tokenu/runtime/inMemoryCostLedgerRepository";
 import { InMemoryProviderPricingRepository } from "@/tokenu/runtime/inMemoryProviderPricingRepository";
 import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutionEventSinkFactory";
+import type { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
+
+type UsageProjectionRecord = Parameters<UsageProjectionService["recordExecution"]>[0];
 
 function completedEvent() {
   return {
@@ -79,18 +82,27 @@ async function createFixture() {
 
   const ledger = new InMemoryCostLedgerRepository();
 
+  const projected: UsageProjectionRecord[] = [];
+
   const factory = new TenantExecutionEventSinkFactory(
-    new CostLedgerService(new ExecutionCostCalculator(pricing), ledger)
+    new CostLedgerService(new ExecutionCostCalculator(pricing), ledger),
+    {
+      async recordExecution(record) {
+        projected.push(record);
+        return true;
+      },
+    }
   );
 
   return {
     ledger,
+    projected,
     factory,
   };
 }
 
-test("tenant execution event sink factory records authoritative billing for trusted workspace", async () => {
-  const { ledger, factory } = await createFixture();
+test("tenant execution event sink factory records critical billing and automatic usage projection", async () => {
+  const { ledger, projected, factory } = await createFixture();
 
   const sink = factory.create("workspace-a");
 
@@ -101,10 +113,52 @@ test("tenant execution event sink factory records authoritative billing for trus
   assert.equal(entries.length, 1);
   assert.equal(entries[0]?.attemptId, "attempt-1");
   assert.equal(entries[0]?.providerId, "groq");
+
+  assert.equal(projected.length, 1);
+  assert.equal(projected[0]?.workspaceId, "workspace-a");
+  assert.equal(projected[0]?.attemptId, "attempt-1");
+  assert.equal(projected[0]?.providerId, "groq");
 });
 
-test("best-effort consumer failure does not block authoritative billing", async () => {
-  const { ledger, factory } = await createFixture();
+test("automatic usage projection failure is best-effort and does not block authoritative billing", async () => {
+  const pricing = new InMemoryProviderPricingRepository();
+
+  await pricing.save({
+    providerId: "groq",
+    modelId: "llama-test",
+    currency: "USD",
+    inputTokenPricePerMillion: 0.2,
+    outputTokenPricePerMillion: 0.8,
+    effectiveFrom: "2026-09-01T00:00:00.000Z",
+  });
+
+  const ledger = new InMemoryCostLedgerRepository();
+
+  const factory = new TenantExecutionEventSinkFactory(
+    new CostLedgerService(new ExecutionCostCalculator(pricing), ledger),
+    {
+      async recordExecution() {
+        throw new Error("usage projection unavailable");
+      },
+    }
+  );
+
+  const failures: unknown[] = [];
+
+  const sink = factory.create("workspace-a", {
+    onBestEffortError(failure) {
+      failures.push(failure);
+    },
+  });
+
+  await assert.doesNotReject(sink.emit(completedEvent()));
+
+  assert.equal((await ledger.list("workspace-a")).length, 1);
+  assert.equal(failures.length, 1);
+});
+
+test("additional best-effort consumer failure does not block billing or automatic projection", async () => {
+  const { ledger, projected, factory } = await createFixture();
 
   const failures: unknown[] = [];
 
@@ -124,12 +178,12 @@ test("best-effort consumer failure does not block authoritative billing", async 
   await assert.doesNotReject(sink.emit(completedEvent()));
 
   assert.equal((await ledger.list("workspace-a")).length, 1);
-
+  assert.equal(projected.length, 1);
   assert.equal(failures.length, 1);
 });
 
-test("tenant execution event sink factory ignores dispatch failure for billing", async () => {
-  const { ledger, factory } = await createFixture();
+test("tenant execution event sink factory ignores dispatch failure for billing and usage projection", async () => {
+  const { ledger, projected, factory } = await createFixture();
 
   const sink = factory.create("workspace-a");
 
@@ -142,6 +196,7 @@ test("tenant execution event sink factory ignores dispatch failure for billing",
   });
 
   assert.deepEqual(await ledger.list("workspace-a"), []);
+  assert.deepEqual(projected, []);
 });
 
 test("tenant execution event sink factory rejects blank workspace identity", async () => {
@@ -179,7 +234,12 @@ test("authoritative billing failure remains critical", async () => {
       async periodTotals() {
         return [];
       },
-    })
+    }),
+    {
+      async recordExecution() {
+        return true;
+      },
+    }
   );
 
   const sink = factory.create("workspace-a");

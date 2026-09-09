@@ -6,12 +6,17 @@ import {
   type BestEffortExecutionEventFailure,
 } from "@/tokenu/runtime/compositeExecutionEventSink";
 import { ExecutionBillingCollector } from "@/tokenu/runtime/executionBillingCollector";
+import { TenantUsageProjectionCollector } from "@/tokenu/runtime/tenantUsageProjectionCollector";
+import type { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
+
+type UsageProjectionServicePort = Pick<UsageProjectionService, "recordExecution">;
 
 export interface TenantExecutionEventSinkFactoryOptions {
   /**
-   * Optional non-authoritative projections such as metrics or analytics.
+   * Additional non-authoritative consumers such as metrics or telemetry.
    *
-   * Failures from these consumers must never make execution delivery fail.
+   * The persistent TokenU usage projection is installed automatically and does
+   * not need to be supplied here.
    */
   readonly bestEffortConsumers?: readonly ExecutionEventConsumer[];
 
@@ -23,10 +28,14 @@ export interface TenantExecutionEventSinkFactoryOptions {
  *
  * Workspace identity enters only at this trusted orchestration boundary.
  * Authoritative billing is always critical.
- * Telemetry consumers are optional and best-effort.
+ * Persistent usage projection is always installed as best-effort.
+ * Additional telemetry consumers remain optional and best-effort.
  */
 export class TenantExecutionEventSinkFactory {
-  constructor(private readonly costLedgerService: CostLedgerService) {}
+  constructor(
+    private readonly costLedgerService: CostLedgerService,
+    private readonly usageProjectionService: UsageProjectionServicePort
+  ) {}
 
   create(
     workspaceId: string,
@@ -34,9 +43,14 @@ export class TenantExecutionEventSinkFactory {
   ): ExecutionEventSink {
     const billingCollector = new ExecutionBillingCollector(workspaceId, this.costLedgerService);
 
+    const usageProjectionCollector = new TenantUsageProjectionCollector(
+      workspaceId,
+      this.usageProjectionService
+    );
+
     return new CompositeExecutionEventSink({
       criticalConsumers: [billingCollector],
-      bestEffortConsumers: options.bestEffortConsumers ?? [],
+      bestEffortConsumers: [usageProjectionCollector, ...(options.bestEffortConsumers ?? [])],
       onBestEffortError: options.onBestEffortError,
     });
   }
