@@ -6,7 +6,11 @@ export class ExecutionCostCalculator {
   constructor(private readonly pricingRepository: ProviderPricingRepository) {}
 
   async calculate(record: ExecutionUsageRecord): Promise<ExecutionCost | null> {
-    const pricing = await this.pricingRepository.find(record.providerId, record.modelId);
+    const pricing = await this.pricingRepository.findEffective(
+      record.providerId,
+      record.modelId,
+      record.recordedAt
+    );
 
     if (!pricing) {
       return null;

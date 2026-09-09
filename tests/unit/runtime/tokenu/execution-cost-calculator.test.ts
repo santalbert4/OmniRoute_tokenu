@@ -4,7 +4,7 @@ import test from "node:test";
 import { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
 import { InMemoryProviderPricingRepository } from "@/tokenu/runtime/inMemoryProviderPricingRepository";
 
-test("execution cost calculator calculates provider cost", async () => {
+test("execution cost calculator uses pricing effective when execution was recorded", async () => {
   const repository = new InMemoryProviderPricingRepository();
 
   await repository.save({
@@ -13,7 +13,16 @@ test("execution cost calculator calculates provider cost", async () => {
     currency: "USD",
     inputTokenPricePerMillion: 0.2,
     outputTokenPricePerMillion: 0.8,
-    effectiveFrom: "2026-09-08T00:00:00.000Z",
+    effectiveFrom: "2026-01-01T00:00:00.000Z",
+  });
+
+  await repository.save({
+    providerId: "groq",
+    modelId: "llama-test",
+    currency: "USD",
+    inputTokenPricePerMillion: 10,
+    outputTokenPricePerMillion: 20,
+    effectiveFrom: "2026-10-01T00:00:00.000Z",
   });
 
   const calculator = new ExecutionCostCalculator(repository);

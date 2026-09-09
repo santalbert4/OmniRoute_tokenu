@@ -5,5 +5,9 @@ export interface ProviderPricingRepository {
 
   list(): Promise<readonly ProviderPricing[]>;
 
-  find(providerId: string, modelId: string): Promise<ProviderPricing | null>;
+  findEffective(
+    providerId: string,
+    modelId: string,
+    effectiveAt: string
+  ): Promise<ProviderPricing | null>;
 }

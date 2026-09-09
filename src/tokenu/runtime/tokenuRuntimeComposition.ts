@@ -1,4 +1,5 @@
 import { SqliteCostLedgerRepository } from "@/tokenu/adapters/storage/sqliteCostLedgerRepository";
+import { SqliteProviderPricingRepository } from "@/tokenu/adapters/storage/sqliteProviderPricingRepository";
 import { SqliteProviderUsageRepository } from "@/tokenu/adapters/storage/sqliteProviderUsageRepository";
 import { SqliteWorkspacePlanAssignmentRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePlanAssignmentRepository";
 import { SqliteWorkspacePlanRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePlanRepository";
@@ -11,6 +12,9 @@ import {
   type TokenUSqliteDatabase,
 } from "@/tokenu/adapters/storage/tokenuSqliteDatabase";
 import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
+import { CostLedgerService } from "@/tokenu/runtime/costLedgerService";
+import { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
+import type { ProviderPricingRepository } from "@/tokenu/runtime/providerPricingRepository";
 import { ProviderUsageAggregationService } from "@/tokenu/runtime/providerUsageAggregationService";
 import { ProviderUsageMeteringService } from "@/tokenu/runtime/providerUsageMeteringService";
 import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepository";
@@ -46,6 +50,12 @@ export interface TokenURuntimeComposition {
   readonly providerUsageRepository: ProviderUsageRepository;
 
   readonly costLedgerRepository: CostLedgerRepository;
+
+  readonly providerPricingRepository: ProviderPricingRepository;
+
+  readonly executionCostCalculator: ExecutionCostCalculator;
+
+  readonly costLedgerService: CostLedgerService;
 
   readonly workspacePlanResolverService: WorkspacePlanResolverService;
 
@@ -84,6 +94,12 @@ export function createTokenURuntimeComposition(
   const providerUsageRepository = new SqliteProviderUsageRepository(database);
 
   const costLedgerRepository = new SqliteCostLedgerRepository(database);
+
+  const providerPricingRepository = new SqliteProviderPricingRepository(database);
+
+  const executionCostCalculator = new ExecutionCostCalculator(providerPricingRepository);
+
+  const costLedgerService = new CostLedgerService(executionCostCalculator, costLedgerRepository);
 
   const workspacePlanResolverService = new WorkspacePlanResolverService(
     workspacePlanAssignmentRepository,
@@ -131,6 +147,9 @@ export function createTokenURuntimeComposition(
     workspaceUsageMeteringRepository,
     providerUsageRepository,
     costLedgerRepository,
+    providerPricingRepository,
+    executionCostCalculator,
+    costLedgerService,
     workspacePlanResolverService,
     workspaceSpendAggregatorService,
     costQuotaEnforcementService,
