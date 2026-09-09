@@ -47,6 +47,31 @@ function numberOrNull(value: JsonValue | undefined): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * Groq documents that the minimum cacheable prompt length across supported
+ * prompt-caching models starts at 128 tokens. Below that provider-wide floor,
+ * a cache hit is impossible even when prompt_tokens_details is omitted.
+ *
+ * At or above the floor we remain conservative: absent cache detail stays
+ * unknown so differentiated cache pricing continues to fail closed.
+ */
+const GROQ_MIN_CACHEABLE_PROMPT_TOKENS = 128;
+
+function normalizeCacheReadTokens(
+  inputTokens: number | null,
+  promptDetails: JsonObject | null
+): number | null {
+  if (promptDetails !== null) {
+    return numberOrNull(promptDetails.cached_tokens);
+  }
+
+  if (inputTokens !== null && inputTokens < GROQ_MIN_CACHEABLE_PROMPT_TOKENS) {
+    return 0;
+  }
+
+  return null;
+}
+
 function normalizeUsage(output: JsonValue): NormalizedUsage {
   const root = asJsonObject(output);
   const usage = asJsonObject(root?.usage);
@@ -55,14 +80,15 @@ function normalizeUsage(output: JsonValue): NormalizedUsage {
     return EMPTY_USAGE;
   }
 
+  const inputTokens = numberOrNull(usage.prompt_tokens);
   const promptDetails = asJsonObject(usage.prompt_tokens_details);
   const completionDetails = asJsonObject(usage.completion_tokens_details);
 
   return {
-    inputTokens: numberOrNull(usage.prompt_tokens),
+    inputTokens,
     outputTokens: numberOrNull(usage.completion_tokens),
     reasoningTokens: numberOrNull(completionDetails?.reasoning_tokens),
-    cacheReadTokens: numberOrNull(promptDetails?.cached_tokens),
+    cacheReadTokens: normalizeCacheReadTokens(inputTokens, promptDetails),
     cacheWriteTokens: null,
     totalTokens: numberOrNull(usage.total_tokens),
   };

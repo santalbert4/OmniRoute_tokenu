@@ -3,7 +3,9 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import test from "node:test";
 
+import { handleTokenUExecute } from "@/app/api/v1/tokenu/execute/executeHandler";
 import { createTokenUProductionRuntimeComposition } from "@/app/api/v1/tokenu/productionRuntime";
+import { GROQ_OFFICIAL_CHAT_COMPLETIONS_URL } from "@/tokenu/adapters/groq/groqAdapterFactory";
 import { AesGcmCredentialCipher } from "@/tokenu/adapters/security/aesGcmCredentialCipher";
 import { SqliteProviderConnectionRepository } from "@/tokenu/adapters/storage/sqliteProviderConnectionRepository";
 import type { TokenUSqliteDatabase } from "@/tokenu/adapters/storage/tokenuSqliteDatabase";
@@ -195,6 +197,287 @@ test("production TokenU runtime activates exact Groq route only after managed cr
   );
 
   assert.equal(pricing.effectiveFrom, GROQ_GPT_OSS_20B_PROVIDER_PRICING.effectiveFrom);
+});
+
+test("production TokenU runtime executes the controlled P6I Groq path through encrypted credentials and persistent billing", async (t) => {
+  const db = createDatabase();
+
+  t.after(() => db.close());
+
+  await provisionGroq(db);
+
+  const connectionRepository = new SqliteProviderConnectionRepository(asTokenUDatabase(db));
+
+  const storedConnection = await connectionRepository.get(GROQ_MANAGED_CONNECTION_ID);
+
+  assert.ok(storedConnection);
+
+  assert.match(storedConnection.encryptedCredential, /^tokenu:cred:v1:/);
+
+  assert.equal(storedConnection.encryptedCredential.includes("gsk_runtime_test_secret"), false);
+
+  let upstreamCalls = 0;
+  let capturedUrl = "";
+  let capturedAuthorization: string | null = null;
+  let capturedModel: unknown = null;
+
+  const fetchStub: typeof fetch = async (input, init): Promise<Response> => {
+    upstreamCalls += 1;
+
+    capturedUrl = String(input);
+
+    const headers = new Headers(init?.headers);
+
+    capturedAuthorization = headers.get("authorization");
+
+    const sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+    capturedModel = sentBody.model;
+
+    return new Response(
+      JSON.stringify({
+        id: "chatcmpl-p6i-controlled",
+        object: "chat.completion",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "TOKENU P6I CONTROLLED OK",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 88,
+          completion_tokens: 132,
+          total_tokens: 220,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  };
+
+  const originalFetch = globalThis.fetch;
+
+  let runtime: Awaited<ReturnType<typeof createTokenUProductionRuntimeComposition>>;
+
+  try {
+    globalThis.fetch = fetchStub;
+
+    runtime = await createTokenUProductionRuntimeComposition({
+      database: asTokenUDatabase(db),
+
+      credentialMasterKey: masterKey,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  await runtime.workspaceRepository.save({
+    id: "workspace-p6i-controlled",
+    createdAt: "2026-09-09T00:00:00.000Z",
+  });
+
+  await runtime.workspacePlanRepository.save({
+    id: "p6i-controlled-pro",
+    tier: "pro",
+    monthlyCostLimit: 10,
+    monthlyRequestLimit: 100,
+    currency: "USD",
+  });
+
+  await runtime.workspacePlanAssignmentRepository.save({
+    workspaceId: "workspace-p6i-controlled",
+    planId: "p6i-controlled-pro",
+    assignedAt: "2026-09-09T00:01:00.000Z",
+  });
+
+  const response = await handleTokenUExecute(
+    new Request("http://localhost/api/v1/tokenu/execute", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-oss-20b",
+        messages: [
+          {
+            role: "user",
+            content: "TOKENU P6I CONTROLLED",
+          },
+        ],
+        stream: false,
+      }),
+    }),
+    "workspace-p6i-controlled",
+    {
+      publicExecutionResolver: runtime.publicExecutionResolver,
+
+      tenantExecutionOrchestrator: runtime.tenantExecutionOrchestrator,
+
+      generateRequestId() {
+        return "request-p6i-controlled";
+      },
+
+      currentPeriod() {
+        return "2026-09";
+      },
+    }
+  );
+
+  assert.equal(response.status, 200);
+
+  const responseBody = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  assert.equal(responseBody.choices?.[0]?.message?.content, "TOKENU P6I CONTROLLED OK");
+
+  assert.equal(upstreamCalls, 1);
+
+  assert.equal(capturedUrl, GROQ_OFFICIAL_CHAT_COMPLETIONS_URL);
+
+  assert.equal(capturedAuthorization, "Bearer gsk_runtime_test_secret");
+
+  assert.equal(capturedModel, "openai/gpt-oss-20b");
+
+  const requestUsage = await runtime.workspaceRequestUsageRepository.get(
+    "workspace-p6i-controlled",
+    "2026-09"
+  );
+
+  assert.equal(requestUsage?.requestCount, 1);
+
+  const ledger = await runtime.costLedgerRepository.list("workspace-p6i-controlled");
+
+  assert.equal(ledger.length, 1);
+
+  assert.deepEqual(ledger[0], {
+    workspaceId: "workspace-p6i-controlled",
+
+    requestId: "request-p6i-controlled",
+
+    attemptId: "request-p6i-controlled-1",
+
+    providerId: "groq",
+
+    modelId: "openai/gpt-oss-20b",
+
+    currency: "USD",
+
+    inputTokens: 88,
+
+    outputTokens: 132,
+
+    totalTokens: 220,
+
+    cost: 0.000046,
+
+    createdAt: ledger[0]?.createdAt,
+  });
+
+  assert.ok(ledger[0]?.createdAt);
+
+  const rawLedger = db
+    .prepare(
+      `SELECT
+         cost_micros,
+         input_tokens,
+         output_tokens,
+         total_tokens
+       FROM tokenu_cost_ledger
+       WHERE workspace_id = ?
+         AND attempt_id = ?`
+    )
+    .get("workspace-p6i-controlled", "request-p6i-controlled-1") as {
+    cost_micros: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+
+  assert.deepEqual(rawLedger, {
+    cost_micros: 46,
+    input_tokens: 88,
+    output_tokens: 132,
+    total_tokens: 220,
+  });
+
+  const rawProjection = db
+    .prepare(
+      `SELECT
+         estimated_cost_micros,
+         input_tokens,
+         output_tokens
+       FROM tokenu_usage_projection_attempts
+       WHERE workspace_id = ?
+         AND attempt_id = ?`
+    )
+    .get("workspace-p6i-controlled", "request-p6i-controlled-1") as {
+    estimated_cost_micros: number;
+    input_tokens: number;
+    output_tokens: number;
+  };
+
+  assert.deepEqual(rawProjection, {
+    estimated_cost_micros: 46,
+    input_tokens: 88,
+    output_tokens: 132,
+  });
+
+  const workspaceUsage = await runtime.workspaceUsageMeteringRepository.get(
+    "workspace-p6i-controlled",
+    "2026-09"
+  );
+
+  assert.deepEqual(workspaceUsage, {
+    workspaceId: "workspace-p6i-controlled",
+
+    period: "2026-09",
+
+    meteredExecutionCount: 1,
+
+    inputTokens: 88,
+
+    outputTokens: 132,
+
+    estimatedCost: 0.000046,
+  });
+
+  const providerUsage = await runtime.providerUsageRepository.get(
+    "workspace-p6i-controlled",
+    "2026-09",
+    "groq",
+    "openai/gpt-oss-20b"
+  );
+
+  assert.deepEqual(providerUsage, {
+    workspaceId: "workspace-p6i-controlled",
+
+    period: "2026-09",
+
+    providerId: "groq",
+
+    modelId: "openai/gpt-oss-20b",
+
+    requestCount: 1,
+
+    inputTokens: 88,
+
+    outputTokens: 132,
+
+    estimatedCost: 0.000046,
+  });
 });
 
 test("production TokenU runtime rejects an enabled managed connection encrypted under another master key", async (t) => {

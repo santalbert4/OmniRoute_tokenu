@@ -245,6 +245,139 @@ test("Groq adapter performs exactly one official non-streaming request", async (
   assert.equal(result.usage.totalTokens, 18);
 });
 
+test("Groq adapter infers zero cached input below the documented Groq cacheable floor", async () => {
+  const fetchImpl = (async (): Promise<Response> => {
+    return new Response(
+      JSON.stringify({
+        id: "chatcmpl-cache-floor",
+        object: "chat.completion",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "ok",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 87,
+          completion_tokens: 1,
+          total_tokens: 88,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }) as typeof fetch;
+
+  const factory = new GroqAdapterFactory({ fetchImpl });
+  const bound = factory.bind(createBinding());
+
+  assert.equal(bound.ok, true);
+  if (!bound.ok) return;
+
+  const result = await bound.adapter.execute(createRequest());
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.usage.inputTokens, 87);
+  assert.equal(result.usage.cacheReadTokens, 0);
+});
+
+test("Groq adapter keeps cache usage unknown at the cacheable floor when details are omitted", async () => {
+  const fetchImpl = (async (): Promise<Response> => {
+    return new Response(
+      JSON.stringify({
+        id: "chatcmpl-cache-floor-boundary",
+        object: "chat.completion",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "ok",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 128,
+          completion_tokens: 1,
+          total_tokens: 129,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }) as typeof fetch;
+
+  const factory = new GroqAdapterFactory({ fetchImpl });
+  const bound = factory.bind(createBinding());
+
+  assert.equal(bound.ok, true);
+  if (!bound.ok) return;
+
+  const result = await bound.adapter.execute(createRequest());
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.usage.inputTokens, 128);
+  assert.equal(result.usage.cacheReadTokens, null);
+});
+
+test("Groq adapter keeps cache usage unknown when details exist without cached_tokens", async () => {
+  const fetchImpl = (async (): Promise<Response> => {
+    return new Response(
+      JSON.stringify({
+        id: "chatcmpl-cache-detail-missing",
+        object: "chat.completion",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "ok",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 87,
+          completion_tokens: 1,
+          total_tokens: 88,
+          prompt_tokens_details: {},
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  }) as typeof fetch;
+
+  const factory = new GroqAdapterFactory({ fetchImpl });
+  const bound = factory.bind(createBinding());
+
+  assert.equal(bound.ok, true);
+  if (!bound.ok) return;
+
+  const result = await bound.adapter.execute(createRequest());
+
+  assert.equal(result.status, "succeeded");
+  assert.equal(result.usage.inputTokens, 87);
+  assert.equal(result.usage.cacheReadTokens, null);
+});
+
 test("Groq adapter rejects unsupported parameters before dispatch", async () => {
   let callCount = 0;
 
