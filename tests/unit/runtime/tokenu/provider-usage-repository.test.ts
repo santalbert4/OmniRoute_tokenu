@@ -65,3 +65,29 @@ test("provider usage repository lists usage by workspace and period", async () =
   assert.equal(usages.length, 1);
   assert.equal(usages[0]?.modelId, "model-a");
 });
+
+test("provider usage repository increments usage deltas by provider and model", async () => {
+  const repository = new InMemoryProviderUsageRepository();
+
+  await repository.increment("workspace-1", "2026-09", "openai", "gpt-5", {
+    inputTokens: 1000,
+    outputTokens: 500,
+    estimatedCost: 0.05,
+  });
+
+  await repository.increment("workspace-1", "2026-09", "openai", "gpt-5", {
+    inputTokens: 2000,
+    outputTokens: 1000,
+    estimatedCost: 0.1,
+  });
+
+  const usage = await repository.get("workspace-1", "2026-09", "openai", "gpt-5");
+
+  assert.equal(usage?.requestCount, 2);
+
+  assert.equal(usage?.inputTokens, 3000);
+
+  assert.equal(usage?.outputTokens, 1500);
+
+  assert.equal(usage?.estimatedCost, 0.15);
+});

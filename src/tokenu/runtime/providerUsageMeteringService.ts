@@ -12,21 +12,10 @@ export class ProviderUsageMeteringService {
     outputTokens: number,
     estimatedCost: number
   ): Promise<void> {
-    const existing = await this.repository.get(workspaceId, period, providerId, modelId);
-
-    await this.repository.save({
-      workspaceId,
-      period,
-      providerId,
-      modelId,
-
-      requestCount: (existing?.requestCount ?? 0) + 1,
-
-      inputTokens: (existing?.inputTokens ?? 0) + inputTokens,
-
-      outputTokens: (existing?.outputTokens ?? 0) + outputTokens,
-
-      estimatedCost: Number(((existing?.estimatedCost ?? 0) + estimatedCost).toFixed(6)),
+    await this.repository.increment(workspaceId, period, providerId, modelId, {
+      inputTokens,
+      outputTokens,
+      estimatedCost,
     });
   }
 }
