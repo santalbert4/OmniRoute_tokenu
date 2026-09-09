@@ -49,8 +49,8 @@ async function body(response: Response): Promise<unknown> {
   return response.json();
 }
 
-test("public TokenU usage route is fail closed before P4E", async () => {
-  const response = await GET();
+test("public TokenU usage route rejects missing Bearer credentials", async () => {
+  const response = await GET(new Request("http://localhost/api/v1/tokenu/usage?period=2026-09"));
 
   assert.equal(response.status, 401);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
