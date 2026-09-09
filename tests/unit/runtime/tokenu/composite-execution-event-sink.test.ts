@@ -26,44 +26,128 @@ const event = {
   },
 } as ExecutionEvent;
 
-test("composite execution event sink fans events out to every consumer", async () => {
+test("composite execution event sink delivers events to critical and best-effort consumers", async () => {
   const received: string[] = [];
 
-  const sink = new CompositeExecutionEventSink([
-    {
-      async consume() {
-        received.push("first");
+  const sink = new CompositeExecutionEventSink({
+    criticalConsumers: [
+      {
+        async consume() {
+          received.push("critical");
+        },
       },
-    },
-    {
-      async consume() {
-        received.push("second");
+    ],
+    bestEffortConsumers: [
+      {
+        async consume() {
+          received.push("best-effort");
+        },
       },
-    },
-  ]);
+    ],
+  });
 
   await sink.emit(event);
 
-  assert.deepEqual(received.sort(), ["first", "second"]);
+  assert.deepEqual(received.sort(), ["best-effort", "critical"]);
 });
 
-test("composite execution event sink invokes all consumers even when one fails", async () => {
+test("critical execution event consumer failure rejects delivery", async () => {
+  let bestEffortCalled = false;
+
+  const sink = new CompositeExecutionEventSink({
+    criticalConsumers: [
+      {
+        async consume() {
+          throw new Error("critical billing failed");
+        },
+      },
+    ],
+    bestEffortConsumers: [
+      {
+        async consume() {
+          bestEffortCalled = true;
+        },
+      },
+    ],
+  });
+
+  await assert.rejects(sink.emit(event), /critical billing failed/);
+
+  assert.equal(bestEffortCalled, true);
+});
+
+test("best-effort execution event failure does not reject delivery", async () => {
+  const failures: unknown[] = [];
+
+  const sink = new CompositeExecutionEventSink({
+    criticalConsumers: [
+      {
+        async consume() {},
+      },
+    ],
+    bestEffortConsumers: [
+      {
+        async consume() {
+          throw new Error("metrics unavailable");
+        },
+      },
+    ],
+    onBestEffortError(failure) {
+      failures.push(failure);
+    },
+  });
+
+  await assert.doesNotReject(sink.emit(event));
+
+  assert.equal(failures.length, 1);
+
+  const failure = failures[0] as {
+    consumerIndex: number;
+    error: Error;
+  };
+
+  assert.equal(failure.consumerIndex, 0);
+
+  assert.match(failure.error.message, /metrics unavailable/);
+});
+
+test("all best-effort consumers run even when one fails", async () => {
   let secondCalled = false;
 
-  const sink = new CompositeExecutionEventSink([
-    {
-      async consume() {
-        throw new Error("consumer failed");
+  const sink = new CompositeExecutionEventSink({
+    bestEffortConsumers: [
+      {
+        async consume() {
+          throw new Error("first failed");
+        },
       },
-    },
-    {
-      async consume() {
-        secondCalled = true;
+      {
+        async consume() {
+          secondCalled = true;
+        },
       },
-    },
-  ]);
+    ],
+    onBestEffortError() {},
+  });
 
-  await assert.rejects(sink.emit(event), /consumer failed/);
+  await assert.doesNotReject(sink.emit(event));
 
   assert.equal(secondCalled, true);
+});
+
+test("best-effort error observer cannot abort execution delivery", async () => {
+  const sink = new CompositeExecutionEventSink({
+    bestEffortConsumers: [
+      {
+        async consume() {
+          throw new Error("telemetry failed");
+        },
+      },
+    ],
+    onBestEffortError() {
+      throw new Error("logger failed");
+    },
+  });
+
+  await assert.doesNotReject(sink.emit(event));
 });
