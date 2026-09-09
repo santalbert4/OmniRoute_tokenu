@@ -200,3 +200,64 @@ test("SQLite metering repositories reject unknown workspaces", async (t) => {
     /tokenu_workspace_not_found/
   );
 });
+
+test("SQLite request admission atomically stops at the monthly limit", async (t) => {
+  const db = createDatabase();
+  t.after(() => db.close());
+
+  const repository = new SqliteWorkspaceRequestUsageRepository(asTokenUDatabase(db));
+
+  const results = await Promise.all(
+    Array.from({ length: 20 }, () => repository.tryConsume("workspace-a", "2026-09", 3))
+  );
+
+  assert.equal(results.filter((result) => result.admitted).length, 3);
+
+  assert.equal(results.filter((result) => !result.admitted).length, 17);
+
+  assert.equal((await repository.get("workspace-a", "2026-09"))?.requestCount, 3);
+});
+
+test("SQLite request admission supports zero limit without creating a counter", async (t) => {
+  const db = createDatabase();
+  t.after(() => db.close());
+
+  const repository = new SqliteWorkspaceRequestUsageRepository(asTokenUDatabase(db));
+
+  const result = await repository.tryConsume("workspace-a", "2026-09", 0);
+
+  assert.deepEqual(result, {
+    admitted: false,
+    remainingRequests: 0,
+    reason: "monthly request quota exceeded",
+  });
+
+  assert.equal(await repository.get("workspace-a", "2026-09"), null);
+});
+
+test("SQLite request admission isolates workspace and period counters", async (t) => {
+  const db = createDatabase();
+  t.after(() => db.close());
+
+  const repository = new SqliteWorkspaceRequestUsageRepository(asTokenUDatabase(db));
+
+  assert.equal((await repository.tryConsume("workspace-a", "2026-09", 1)).admitted, true);
+
+  assert.equal((await repository.tryConsume("workspace-a", "2026-09", 1)).admitted, false);
+
+  assert.equal((await repository.tryConsume("workspace-a", "2026-10", 1)).admitted, true);
+
+  assert.equal((await repository.tryConsume("workspace-b", "2026-09", 1)).admitted, true);
+});
+
+test("SQLite request admission rejects unknown workspace when admission could be consumed", async (t) => {
+  const db = createDatabase();
+  t.after(() => db.close());
+
+  const repository = new SqliteWorkspaceRequestUsageRepository(asTokenUDatabase(db));
+
+  await assert.rejects(
+    repository.tryConsume("workspace-missing", "2026-09", 1),
+    /tokenu_workspace_not_found/
+  );
+});

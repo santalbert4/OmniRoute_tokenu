@@ -19,6 +19,7 @@ import { ProviderUsageAggregationService } from "@/tokenu/runtime/providerUsageA
 import { ProviderUsageMeteringService } from "@/tokenu/runtime/providerUsageMeteringService";
 import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepository";
 import { QuotaEnforcementService } from "@/tokenu/runtime/quotaEnforcementService";
+import { RequestAdmissionService } from "@/tokenu/runtime/requestAdmissionService";
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
 import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
@@ -65,6 +66,8 @@ export interface TokenURuntimeComposition {
   readonly costQuotaEnforcementService: QuotaEnforcementService;
 
   readonly requestQuotaEnforcementService: RequestQuotaEnforcementService;
+
+  readonly requestAdmissionService: RequestAdmissionService;
 
   readonly workspaceQuotaGateService: WorkspaceQuotaGateService;
 
@@ -117,6 +120,8 @@ export function createTokenURuntimeComposition(
     workspaceRequestUsageRepository
   );
 
+  const requestAdmissionService = new RequestAdmissionService(workspaceRequestUsageRepository);
+
   const workspaceQuotaGateService = new WorkspaceQuotaGateService(
     costQuotaEnforcementService,
     requestQuotaEnforcementService
@@ -162,6 +167,7 @@ export function createTokenURuntimeComposition(
     workspaceSpendAggregatorService,
     costQuotaEnforcementService,
     requestQuotaEnforcementService,
+    requestAdmissionService,
     workspaceQuotaGateService,
     tenantExecutionPreflightService,
     workspaceUsageMeteringService,
