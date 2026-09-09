@@ -20,6 +20,7 @@ import { ProviderUsageMeteringService } from "@/tokenu/runtime/providerUsageMete
 import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepository";
 import { QuotaEnforcementService } from "@/tokenu/runtime/quotaEnforcementService";
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
+import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
 import type { WorkspacePlanRepository } from "@/tokenu/runtime/workspacePlanRepository";
 import { WorkspacePlanResolverService } from "@/tokenu/runtime/workspacePlanResolverService";
@@ -66,6 +67,8 @@ export interface TokenURuntimeComposition {
   readonly requestQuotaEnforcementService: RequestQuotaEnforcementService;
 
   readonly workspaceQuotaGateService: WorkspaceQuotaGateService;
+
+  readonly tenantExecutionPreflightService: TenantExecutionPreflightService;
 
   readonly workspaceUsageMeteringService: WorkspaceUsageMeteringService;
 
@@ -119,6 +122,11 @@ export function createTokenURuntimeComposition(
     requestQuotaEnforcementService
   );
 
+  const tenantExecutionPreflightService = new TenantExecutionPreflightService(
+    workspacePlanResolverService,
+    workspaceQuotaGateService
+  );
+
   const workspaceUsageMeteringService = new WorkspaceUsageMeteringService(
     workspaceUsageMeteringRepository
   );
@@ -155,6 +163,7 @@ export function createTokenURuntimeComposition(
     costQuotaEnforcementService,
     requestQuotaEnforcementService,
     workspaceQuotaGateService,
+    tenantExecutionPreflightService,
     workspaceUsageMeteringService,
     providerUsageMeteringService,
     providerUsageAggregationService,

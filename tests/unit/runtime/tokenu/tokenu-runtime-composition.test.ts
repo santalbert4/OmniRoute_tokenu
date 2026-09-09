@@ -205,6 +205,20 @@ test("TokenU runtime composition shares persistent SQLite state across identity 
     remainingRequests: 1,
   });
 
+  const preflight = await runtime.tenantExecutionPreflightService.evaluate(
+    "workspace-a",
+    "2026-09"
+  );
+
+  assert.equal(preflight.status, "allowed");
+
+  if (preflight.status !== "allowed") {
+    assert.fail("Expected runtime preflight to allow execution");
+  }
+
+  assert.equal(preflight.plan.id, "starter");
+  assert.equal(preflight.quota.remainingRequests, 1);
+
   await runtime.workspaceRequestUsageRepository.increment("workspace-a", "2026-09");
 
   const exhausted = await runtime.workspaceQuotaGateService.evaluate(
@@ -219,6 +233,19 @@ test("TokenU runtime composition shares persistent SQLite state across identity 
     remainingCost: 0.6,
     remainingRequests: 0,
   });
+
+  const deniedPreflight = await runtime.tenantExecutionPreflightService.evaluate(
+    "workspace-a",
+    "2026-09"
+  );
+
+  assert.equal(deniedPreflight.status, "quota-denied");
+
+  if (deniedPreflight.status !== "quota-denied") {
+    assert.fail("Expected runtime preflight quota denial");
+  }
+
+  assert.equal(deniedPreflight.quota.reason, "monthly request quota exceeded");
 });
 
 test("TokenU runtime composition getter returns one singleton instance", () => {
@@ -231,6 +258,8 @@ test("TokenU runtime composition getter returns one singleton instance", () => {
   assert.equal(first.database, second.database);
 
   assert.equal(first.costLedgerRepository, second.costLedgerRepository);
+
+  assert.equal(first.tenantExecutionPreflightService, second.tenantExecutionPreflightService);
 
   assert.equal(first.workspaceUsageQueryService, second.workspaceUsageQueryService);
 });
