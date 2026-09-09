@@ -1,4 +1,5 @@
 import { SqliteCostLedgerRepository } from "@/tokenu/adapters/storage/sqliteCostLedgerRepository";
+import type { RetryPolicy } from "@/tokenu/contracts/retryPolicy";
 import { SqliteProviderPricingRepository } from "@/tokenu/adapters/storage/sqliteProviderPricingRepository";
 import { SqliteProviderUsageRepository } from "@/tokenu/adapters/storage/sqliteProviderUsageRepository";
 import { SqliteUsageProjectionRepository } from "@/tokenu/adapters/storage/sqliteUsageProjectionRepository";
@@ -12,18 +13,34 @@ import {
   getTokenUSqliteDatabase,
   type TokenUSqliteDatabase,
 } from "@/tokenu/adapters/storage/tokenuSqliteDatabase";
+import type { TokenUAdapterFactoryRegistry } from "@/tokenu/runtime/adapterRegistry";
 import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
 import { CostLedgerService } from "@/tokenu/runtime/costLedgerService";
+import { DefaultAdapterFactoryRegistry } from "@/tokenu/runtime/defaultAdapterFactoryRegistry";
+import { DefaultExecutionDependencyResolver } from "@/tokenu/runtime/defaultExecutionDependencyResolver";
+import { DefaultExecutionDispatcher } from "@/tokenu/runtime/defaultExecutionDispatcher";
+import { DefaultExecutionPlanRunnerFactory } from "@/tokenu/runtime/defaultExecutionPlanRunnerFactory";
+import { DefaultRetryPolicy } from "@/tokenu/runtime/defaultRetryPolicy";
 import { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
+import type { ExecutionDependencyResolver } from "@/tokenu/runtime/executionDependencyResolver";
+import type { TokenUExecutionDispatcher } from "@/tokenu/runtime/executionDispatcher";
+import type { ExecutionPlanRunnerFactory } from "@/tokenu/runtime/executionPlanRunnerFactory";
+import type { EndpointProfileRegistry } from "@/tokenu/runtime/endpointProfileRegistry";
 import type { ProviderPricingRepository } from "@/tokenu/runtime/providerPricingRepository";
+import { NullSecretResolver } from "@/tokenu/runtime/nullSecretResolver";
 import { ProviderUsageAggregationService } from "@/tokenu/runtime/providerUsageAggregationService";
 import { ProviderUsageMeteringService } from "@/tokenu/runtime/providerUsageMeteringService";
 import type { ProviderUsageRepository } from "@/tokenu/runtime/providerUsageRepository";
 import { QuotaEnforcementService } from "@/tokenu/runtime/quotaEnforcementService";
 import { RequestAdmissionService } from "@/tokenu/runtime/requestAdmissionService";
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
-import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
+import type { SecretResolver } from "@/tokenu/runtime/secretResolver";
+import { StaticEndpointProfileRegistry } from "@/tokenu/runtime/staticEndpointProfileRegistry";
+import { StaticTechnicalModelProfileRegistry } from "@/tokenu/runtime/staticTechnicalModelProfileRegistry";
 import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutionEventSinkFactory";
+import { TenantExecutionOrchestrator } from "@/tokenu/runtime/tenantExecutionOrchestrator";
+import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
+import type { TechnicalModelProfileRegistry } from "@/tokenu/runtime/technicalModelProfileRegistry";
 import type { UsageProjectionRepository } from "@/tokenu/runtime/usageProjectionRepository";
 import { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
@@ -37,6 +54,31 @@ import { WorkspaceSpendAggregatorService } from "@/tokenu/runtime/workspaceSpend
 import { WorkspaceUsageMeteringService } from "@/tokenu/runtime/workspaceUsageMeteringService";
 import type { WorkspaceUsageMeteringRepository } from "@/tokenu/runtime/workspaceUsageMeteringRepository";
 import { WorkspaceUsageQueryService } from "@/tokenu/runtime/workspaceUsageQueryService";
+
+export interface TokenURuntimeCompositionOptions {
+  /**
+   * Trusted credential boundary.
+   *
+   * Defaults to NullSecretResolver so TokenU never falls back to legacy or
+   * environment credentials implicitly.
+   */
+  readonly secretResolver?: SecretResolver;
+
+  /**
+   * Reviewed technical execution registries.
+   *
+   * Defaults are empty and therefore fail closed until explicitly configured.
+   */
+  readonly endpointProfileRegistry?: EndpointProfileRegistry;
+  readonly technicalModelProfileRegistry?: TechnicalModelProfileRegistry;
+
+  /**
+   * Explicit adapter registry and retry policy overrides, primarily useful for
+   * controlled runtime construction and tests.
+   */
+  readonly adapterFactoryRegistry?: TokenUAdapterFactoryRegistry;
+  readonly retryPolicy?: RetryPolicy;
+}
 
 export interface TokenURuntimeComposition {
   readonly database: TokenUSqliteDatabase;
@@ -69,6 +111,24 @@ export interface TokenURuntimeComposition {
 
   readonly tenantExecutionEventSinkFactory: TenantExecutionEventSinkFactory;
 
+  readonly secretResolver: SecretResolver;
+
+  readonly endpointProfileRegistry: EndpointProfileRegistry;
+
+  readonly technicalModelProfileRegistry: TechnicalModelProfileRegistry;
+
+  readonly adapterFactoryRegistry: TokenUAdapterFactoryRegistry;
+
+  readonly executionDependencyResolver: ExecutionDependencyResolver;
+
+  readonly executionDispatcher: TokenUExecutionDispatcher;
+
+  readonly retryPolicy: RetryPolicy;
+
+  readonly executionPlanRunnerFactory: ExecutionPlanRunnerFactory;
+
+  readonly tenantExecutionOrchestrator: TenantExecutionOrchestrator;
+
   readonly workspacePlanResolverService: WorkspacePlanResolverService;
 
   readonly workspaceSpendAggregatorService: WorkspaceSpendAggregatorService;
@@ -93,7 +153,8 @@ export interface TokenURuntimeComposition {
 }
 
 export function createTokenURuntimeComposition(
-  database: TokenUSqliteDatabase = getTokenUSqliteDatabase()
+  database: TokenUSqliteDatabase = getTokenUSqliteDatabase(),
+  options: TokenURuntimeCompositionOptions = {}
 ): TokenURuntimeComposition {
   const workspaceRepository = new SqliteWorkspaceRepository(database);
 
@@ -129,6 +190,35 @@ export function createTokenURuntimeComposition(
     usageProjectionService
   );
 
+  const secretResolver = options.secretResolver ?? new NullSecretResolver();
+
+  const endpointProfileRegistry =
+    options.endpointProfileRegistry ?? new StaticEndpointProfileRegistry([]);
+
+  const technicalModelProfileRegistry =
+    options.technicalModelProfileRegistry ?? new StaticTechnicalModelProfileRegistry([]);
+
+  const adapterFactoryRegistry =
+    options.adapterFactoryRegistry ?? new DefaultAdapterFactoryRegistry();
+
+  const executionDependencyResolver = new DefaultExecutionDependencyResolver({
+    endpointProfileRegistry,
+    secretResolver,
+    technicalModelProfileRegistry,
+  });
+
+  const executionDispatcher = new DefaultExecutionDispatcher({
+    adapterRegistry: adapterFactoryRegistry,
+    dependencyResolver: executionDependencyResolver,
+  });
+
+  const retryPolicy = options.retryPolicy ?? new DefaultRetryPolicy();
+
+  const executionPlanRunnerFactory = new DefaultExecutionPlanRunnerFactory({
+    dispatcher: executionDispatcher,
+    retryPolicy,
+  });
+
   const workspacePlanResolverService = new WorkspacePlanResolverService(
     workspacePlanAssignmentRepository,
     workspacePlanRepository
@@ -152,6 +242,13 @@ export function createTokenURuntimeComposition(
   const tenantExecutionPreflightService = new TenantExecutionPreflightService(
     workspacePlanResolverService,
     workspaceQuotaGateService
+  );
+
+  const tenantExecutionOrchestrator = new TenantExecutionOrchestrator(
+    tenantExecutionPreflightService,
+    requestAdmissionService,
+    tenantExecutionEventSinkFactory,
+    executionPlanRunnerFactory
   );
 
   const workspaceUsageMeteringService = new WorkspaceUsageMeteringService(
@@ -188,6 +285,15 @@ export function createTokenURuntimeComposition(
     usageProjectionRepository,
     usageProjectionService,
     tenantExecutionEventSinkFactory,
+    secretResolver,
+    endpointProfileRegistry,
+    technicalModelProfileRegistry,
+    adapterFactoryRegistry,
+    executionDependencyResolver,
+    executionDispatcher,
+    retryPolicy,
+    executionPlanRunnerFactory,
+    tenantExecutionOrchestrator,
     workspacePlanResolverService,
     workspaceSpendAggregatorService,
     costQuotaEnforcementService,
