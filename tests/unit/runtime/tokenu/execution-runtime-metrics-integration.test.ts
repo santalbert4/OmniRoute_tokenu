@@ -12,10 +12,13 @@ test("execution runtime produces metrics from completed attempts", async () => {
 
   const runner = new DefaultExecutionPlanRunner({
     dispatcher: {
-      async execute() {
+      async execute(request) {
         return {
           ok: true,
           result: {
+            requestId: request.requestId,
+            attemptId: request.attemptId,
+            target: request.target,
             status: "succeeded",
           } as never,
         };
@@ -59,8 +62,12 @@ test("execution runtime produces metrics from completed attempts", async () => {
       ],
     },
     {
-      create() {
-        return {} as never;
+      create(context) {
+        return {
+          requestId: context.requestId,
+          attemptId: context.attemptId,
+          target: context.target,
+        } as never;
       },
     }
   );
@@ -70,6 +77,8 @@ test("execution runtime produces metrics from completed attempts", async () => {
   const metrics = metricSink.getMetrics();
 
   assert.equal(metrics.length, 1);
+
+  assert.equal(metrics[0]?.attemptId, "request-1-1");
 
   assert.equal(metrics[0]?.providerId, "groq");
 
