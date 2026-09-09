@@ -1,4 +1,5 @@
 import { SqliteCostLedgerRepository } from "@/tokenu/adapters/storage/sqliteCostLedgerRepository";
+import { SqliteTokenUApiKeyRepository } from "@/tokenu/adapters/storage/sqliteTokenUApiKeyRepository";
 import type { RetryPolicy } from "@/tokenu/contracts/retryPolicy";
 import { SqliteProviderPricingRepository } from "@/tokenu/adapters/storage/sqliteProviderPricingRepository";
 import { SqliteProviderUsageRepository } from "@/tokenu/adapters/storage/sqliteProviderUsageRepository";
@@ -44,6 +45,8 @@ import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutio
 import { TenantExecutionOrchestrator } from "@/tokenu/runtime/tenantExecutionOrchestrator";
 import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
 import type { TechnicalModelProfileRegistry } from "@/tokenu/runtime/technicalModelProfileRegistry";
+import type { TokenUApiKeyRepository } from "@/tokenu/runtime/tokenUApiKeyRepository";
+import { TokenUApiKeyService } from "@/tokenu/runtime/tokenUApiKeyService";
 import type { UsageProjectionRepository } from "@/tokenu/runtime/usageProjectionRepository";
 import { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
@@ -95,6 +98,10 @@ export interface TokenURuntimeComposition {
   readonly workspaceRepository: WorkspaceRepository;
 
   readonly workspacePrincipalRepository: WorkspacePrincipalRepository;
+
+  readonly tokenUApiKeyRepository: TokenUApiKeyRepository;
+
+  readonly tokenUApiKeyService: TokenUApiKeyService;
 
   readonly workspacePlanRepository: WorkspacePlanRepository;
 
@@ -172,6 +179,10 @@ export function createTokenURuntimeComposition(
   const workspaceRepository = new SqliteWorkspaceRepository(database);
 
   const workspacePrincipalRepository = new SqliteWorkspacePrincipalRepository(database);
+
+  const tokenUApiKeyRepository = new SqliteTokenUApiKeyRepository(database);
+
+  const tokenUApiKeyService = new TokenUApiKeyService(tokenUApiKeyRepository);
 
   const workspacePlanRepository = new SqliteWorkspacePlanRepository(database);
 
@@ -291,6 +302,8 @@ export function createTokenURuntimeComposition(
     database,
     workspaceRepository,
     workspacePrincipalRepository,
+    tokenUApiKeyRepository,
+    tokenUApiKeyService,
     workspacePlanRepository,
     workspacePlanAssignmentRepository,
     workspaceRequestUsageRepository,

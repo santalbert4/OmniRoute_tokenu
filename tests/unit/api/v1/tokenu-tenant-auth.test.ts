@@ -21,17 +21,12 @@ function request(authorization?: string, extraHeaders?: Record<string, string>):
 
 function dependencies(
   options: {
-    valid?: boolean;
     principalId?: string | null;
     repository?: InMemoryWorkspacePrincipalRepository;
   } = {}
 ): TokenUTenantAuthDependencies {
   return {
-    async validateApiKey() {
-      return options.valid ?? true;
-    },
-
-    async getApiKeyPrincipalId() {
+    async resolveApiKeyPrincipalId() {
       return options.principalId === undefined ? "key-a" : options.principalId;
     },
 
@@ -51,9 +46,7 @@ test("TokenU tenant auth rejects missing Bearer credentials", async () => {
 });
 
 test("TokenU tenant auth is Bearer-only and rejects x-api-key", async () => {
-  let validationCalls = 0;
-
-  const deps = dependencies();
+  let resolutionCalls = 0;
 
   const result = await resolveTokenUTenantAuth(
     request(undefined, {
@@ -61,17 +54,17 @@ test("TokenU tenant auth is Bearer-only and rejects x-api-key", async () => {
       "anthropic-version": "2023-06-01",
     }),
     {
-      ...deps,
+      ...dependencies(),
 
-      async validateApiKey(apiKey) {
-        validationCalls += 1;
+      async resolveApiKeyPrincipalId() {
+        resolutionCalls += 1;
 
-        return deps.validateApiKey(apiKey);
+        return "must-not-run";
       },
     }
   );
 
-  assert.equal(validationCalls, 0);
+  assert.equal(resolutionCalls, 0);
 
   assert.deepEqual(result, {
     ok: false,
@@ -81,21 +74,20 @@ test("TokenU tenant auth is Bearer-only and rejects x-api-key", async () => {
   });
 });
 
-test("TokenU tenant auth rejects an invalid Bearer API key", async () => {
-  let metadataCalls = 0;
+test("TokenU tenant auth rejects unresolved Bearer credentials", async () => {
+  let resolutionCalls = 0;
 
   const result = await resolveTokenUTenantAuth(request("Bearer invalid-secret"), {
-    ...dependencies({
-      valid: false,
-    }),
+    ...dependencies(),
 
-    async getApiKeyPrincipalId() {
-      metadataCalls += 1;
-      return "must-not-run";
+    async resolveApiKeyPrincipalId() {
+      resolutionCalls += 1;
+
+      return null;
     },
   });
 
-  assert.equal(metadataCalls, 0);
+  assert.equal(resolutionCalls, 1);
 
   assert.deepEqual(result, {
     ok: false,
@@ -105,11 +97,11 @@ test("TokenU tenant auth rejects an invalid Bearer API key", async () => {
   });
 });
 
-test("TokenU tenant auth rejects env-key as tenant identity", async () => {
+test("TokenU tenant auth does not grant legacy operator identity implicitly", async () => {
   const result = await resolveTokenUTenantAuth(
     request("Bearer operator-secret"),
     dependencies({
-      principalId: "env-key",
+      principalId: null,
     })
   );
 
@@ -121,9 +113,9 @@ test("TokenU tenant auth rejects env-key as tenant identity", async () => {
   });
 });
 
-test("TokenU tenant auth returns 403 for a valid key without workspace assignment", async () => {
+test("TokenU tenant auth returns 403 for a valid TokenU key without workspace assignment", async () => {
   const result = await resolveTokenUTenantAuth(
-    request("Bearer valid-secret-a"),
+    request("Bearer tku_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
     dependencies({
       principalId: "key-a",
     })
@@ -148,7 +140,7 @@ test("TokenU tenant auth resolves workspace only through principal binding", asy
   });
 
   const result = await resolveTokenUTenantAuth(
-    request("Bearer secret-material-that-is-not-a-workspace-id"),
+    request("Bearer tku_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
     dependencies({
       principalId: "key-a",
       repository,
@@ -180,7 +172,7 @@ test("TokenU tenant auth isolates different principals to different workspaces",
   });
 
   const a = await resolveTokenUTenantAuth(
-    request("Bearer secret-a"),
+    request("Bearer tku_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
     dependencies({
       principalId: "key-a",
       repository,
@@ -188,7 +180,7 @@ test("TokenU tenant auth isolates different principals to different workspaces",
   );
 
   const b = await resolveTokenUTenantAuth(
-    request("Bearer secret-b"),
+    request("Bearer tku_BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"),
     dependencies({
       principalId: "key-b",
       repository,

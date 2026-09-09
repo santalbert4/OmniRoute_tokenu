@@ -1,14 +1,12 @@
-import { getApiKeyMetadata, validateApiKey } from "@/lib/db/apiKeys";
-
 import { getTokenUApiRuntimeComposition } from "./productionRuntime";
 import { resolveTokenUTenantAuth, type TokenUTenantAuthResult } from "./tenantAuth";
 
 /**
- * Current production bridge from OmniRoute API-key storage into TokenU
- * principal/workspace identity.
+ * TokenU API/server authentication composition.
  *
- * The legacy key store is intentionally contained at this API boundary.
- * TokenU execution runtime and adapters do not depend on it.
+ * Only TokenU-owned bearer credentials are resolved here. Legacy OmniRoute
+ * API keys, environment operator keys and client-supplied workspace identity
+ * are deliberately outside this boundary.
  */
 export async function resolveTokenUTenantAuthFromRuntime(
   request: Request
@@ -16,12 +14,8 @@ export async function resolveTokenUTenantAuthFromRuntime(
   const runtime = await getTokenUApiRuntimeComposition();
 
   return resolveTokenUTenantAuth(request, {
-    validateApiKey,
-
-    async getApiKeyPrincipalId(apiKey) {
-      const metadata = await getApiKeyMetadata(apiKey);
-
-      return metadata?.id ?? null;
+    resolveApiKeyPrincipalId(apiKey) {
+      return runtime.tokenUApiKeyService.resolvePrincipalId(apiKey);
     },
 
     workspacePrincipalRepository: runtime.workspacePrincipalRepository,

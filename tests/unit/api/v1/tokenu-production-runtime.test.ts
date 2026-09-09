@@ -4,7 +4,9 @@ import fs from "node:fs";
 import test from "node:test";
 
 import { handleTokenUExecute } from "@/app/api/v1/tokenu/execute/executeHandler";
+import { handleTokenUExecuteRoute } from "@/app/api/v1/tokenu/execute/route";
 import { createTokenUProductionRuntimeComposition } from "@/app/api/v1/tokenu/productionRuntime";
+import { resolveTokenUTenantAuth } from "@/app/api/v1/tokenu/tenantAuth";
 import { GROQ_OFFICIAL_CHAT_COMPLETIONS_URL } from "@/tokenu/adapters/groq/groqAdapterFactory";
 import { AesGcmCredentialCipher } from "@/tokenu/adapters/security/aesGcmCredentialCipher";
 import { SqliteProviderConnectionRepository } from "@/tokenu/adapters/storage/sqliteProviderConnectionRepository";
@@ -53,6 +55,7 @@ function createDatabase(): RawDatabase {
     "178_tokenu_usage_projection_attempts.sql",
     "179_tokenu_provider_connections.sql",
     "180_tokenu_provider_pricing_cache.sql",
+    "181_tokenu_api_keys.sql",
   ]) {
     db.exec(fs.readFileSync(`src/lib/db/migrations/${migration}`, "utf8"));
   }
@@ -478,6 +481,322 @@ test("production TokenU runtime executes the controlled P6I Groq path through en
 
     estimatedCost: 0.000046,
   });
+});
+
+test("production TokenU execute route authenticates a TokenU-owned key before controlled provider execution", async (t) => {
+  const db = createDatabase();
+
+  t.after(() => db.close());
+
+  await provisionGroq(db);
+
+  let upstreamCalls = 0;
+  let capturedUrl = "";
+  let capturedAuthorization: string | null = null;
+  let capturedModel: unknown = null;
+
+  const fetchStub: typeof fetch = async (input, init): Promise<Response> => {
+    upstreamCalls += 1;
+
+    capturedUrl = String(input);
+
+    const headers = new Headers(init?.headers);
+
+    capturedAuthorization = headers.get("authorization");
+
+    const sentBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+
+    capturedModel = sentBody.model;
+
+    return new Response(
+      JSON.stringify({
+        id: "chatcmpl-p7d-controlled",
+        object: "chat.completion",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: "TOKENU P7D AUTH EXECUTE OK",
+            },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: 88,
+          completion_tokens: 132,
+          total_tokens: 220,
+        },
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+  };
+
+  const originalFetch = globalThis.fetch;
+
+  let runtime: Awaited<ReturnType<typeof createTokenUProductionRuntimeComposition>>;
+
+  try {
+    globalThis.fetch = fetchStub;
+
+    runtime = await createTokenUProductionRuntimeComposition({
+      database: asTokenUDatabase(db),
+      credentialMasterKey: masterKey,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const workspaceId = "workspace-p7d-controlled";
+
+  await runtime.workspaceRepository.save({
+    id: workspaceId,
+    createdAt: "2026-09-10T00:00:00.000Z",
+  });
+
+  await runtime.workspacePlanRepository.save({
+    id: "p7d-controlled-pro",
+    tier: "pro",
+    monthlyCostLimit: 10,
+    monthlyRequestLimit: 100,
+    currency: "USD",
+  });
+
+  await runtime.workspacePlanAssignmentRepository.save({
+    workspaceId,
+    planId: "p7d-controlled-pro",
+    assignedAt: "2026-09-10T00:01:00.000Z",
+  });
+
+  const clientKey = await runtime.tokenUApiKeyService.create({
+    name: "P7D controlled client",
+    createdAt: "2026-09-10T00:02:00.000Z",
+  });
+
+  await runtime.workspacePrincipalRepository.save({
+    workspaceId,
+    principalType: "api_key",
+    principalId: clientKey.id,
+    assignedAt: "2026-09-10T00:03:00.000Z",
+  });
+
+  const unassignedKey = await runtime.tokenUApiKeyService.create({
+    name: "P7D unassigned client",
+    createdAt: "2026-09-10T00:04:00.000Z",
+  });
+
+  function executionRequest(bearer: string, extraBody: Record<string, unknown> = {}): Request {
+    return new Request("http://localhost/api/v1/tokenu/execute", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${bearer}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-oss-20b",
+        messages: [
+          {
+            role: "user",
+            content: "TOKENU P7D CONTROLLED",
+          },
+        ],
+        stream: false,
+        ...extraBody,
+      }),
+    });
+  }
+
+  async function executeThroughPublicRoute(request: Request): Promise<Response> {
+    return handleTokenUExecuteRoute(request, {
+      resolveTenantAuth(authRequest) {
+        return resolveTokenUTenantAuth(authRequest, {
+          resolveApiKeyPrincipalId(apiKey) {
+            return runtime.tokenUApiKeyService.resolvePrincipalId(
+              apiKey,
+              "2026-09-10T12:00:00.000Z"
+            );
+          },
+
+          workspacePrincipalRepository: runtime.workspacePrincipalRepository,
+        });
+      },
+
+      handleResolvedExecution(executionRequestValue, resolvedWorkspaceId) {
+        return handleTokenUExecute(executionRequestValue, resolvedWorkspaceId, {
+          publicExecutionResolver: runtime.publicExecutionResolver,
+
+          tenantExecutionOrchestrator: runtime.tenantExecutionOrchestrator,
+
+          generateRequestId() {
+            return "request-p7d-controlled";
+          },
+
+          currentPeriod() {
+            return "2026-09";
+          },
+        });
+      },
+    });
+  }
+
+  const response = await executeThroughPublicRoute(executionRequest(clientKey.token));
+
+  assert.equal(response.status, 200);
+
+  const responseBody = (await response.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+      };
+    }>;
+  };
+
+  assert.equal(responseBody.choices?.[0]?.message?.content, "TOKENU P7D AUTH EXECUTE OK");
+
+  assert.equal(upstreamCalls, 1);
+
+  assert.equal(capturedUrl, GROQ_OFFICIAL_CHAT_COMPLETIONS_URL);
+
+  assert.equal(capturedAuthorization, "Bearer gsk_runtime_test_secret");
+
+  assert.notEqual(capturedAuthorization, `Bearer ${clientKey.token}`);
+
+  assert.equal(capturedModel, "openai/gpt-oss-20b");
+
+  const storedClientKey = db
+    .prepare(
+      `SELECT
+         id,
+         key_prefix,
+         key_hash,
+         last_used_at
+       FROM tokenu_api_keys
+       WHERE id = ?`
+    )
+    .get(clientKey.id) as {
+    id: string;
+    key_prefix: string;
+    key_hash: string;
+    last_used_at: string | null;
+  };
+
+  assert.equal(storedClientKey.id, clientKey.id);
+
+  assert.equal(storedClientKey.key_prefix, clientKey.keyPrefix);
+
+  assert.match(storedClientKey.key_hash, /^[0-9a-f]{64}$/);
+
+  assert.equal(storedClientKey.last_used_at, "2026-09-10T12:00:00.000Z");
+
+  assert.equal(JSON.stringify(storedClientKey).includes(clientKey.token), false);
+
+  const binding = await runtime.workspacePrincipalRepository.get("api_key", clientKey.id);
+
+  assert.equal(binding?.workspaceId, workspaceId);
+
+  const requestUsage = await runtime.workspaceRequestUsageRepository.get(workspaceId, "2026-09");
+
+  assert.equal(requestUsage?.requestCount, 1);
+
+  const ledger = await runtime.costLedgerRepository.list(workspaceId);
+
+  assert.equal(ledger.length, 1);
+
+  assert.deepEqual(ledger[0], {
+    workspaceId,
+    requestId: "request-p7d-controlled",
+    attemptId: "request-p7d-controlled-1",
+    providerId: "groq",
+    modelId: "openai/gpt-oss-20b",
+    currency: "USD",
+    inputTokens: 88,
+    outputTokens: 132,
+    totalTokens: 220,
+    cost: 0.000046,
+    createdAt: ledger[0]?.createdAt,
+  });
+
+  const rawLedger = db
+    .prepare(
+      `SELECT
+         cost_micros,
+         input_tokens,
+         output_tokens,
+         total_tokens
+       FROM tokenu_cost_ledger
+       WHERE workspace_id = ?
+         AND attempt_id = ?`
+    )
+    .get(workspaceId, "request-p7d-controlled-1") as {
+    cost_micros: number;
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+  };
+
+  assert.deepEqual(rawLedger, {
+    cost_micros: 46,
+    input_tokens: 88,
+    output_tokens: 132,
+    total_tokens: 220,
+  });
+
+  const unassignedResponse = await executeThroughPublicRoute(executionRequest(unassignedKey.token));
+
+  assert.equal(unassignedResponse.status, 403);
+
+  assert.deepEqual(await unassignedResponse.json(), {
+    error: {
+      code: "workspace_not_assigned",
+      message: "API key is not assigned to a TokenU workspace",
+    },
+  });
+
+  assert.equal(upstreamCalls, 1);
+
+  const legacyBearerResponse = await executeThroughPublicRoute(
+    executionRequest("gsk_runtime_test_secret")
+  );
+
+  assert.equal(legacyBearerResponse.status, 401);
+
+  assert.deepEqual(await legacyBearerResponse.json(), {
+    error: {
+      code: "unauthorized",
+      message: "Unauthorized",
+    },
+  });
+
+  assert.equal(upstreamCalls, 1);
+
+  const workspaceOverrideResponse = await executeThroughPublicRoute(
+    executionRequest(clientKey.token, {
+      workspaceId: "workspace-attacker",
+    })
+  );
+
+  assert.equal(workspaceOverrideResponse.status, 400);
+
+  assert.deepEqual(await workspaceOverrideResponse.json(), {
+    error: {
+      code: "internal_field_not_allowed",
+      message: 'Field "workspaceId" is not allowed in the public TokenU execution API',
+    },
+  });
+
+  assert.equal(upstreamCalls, 1);
+
+  assert.equal(
+    (await runtime.workspaceRequestUsageRepository.get(workspaceId, "2026-09"))?.requestCount,
+    1
+  );
+
+  assert.equal((await runtime.costLedgerRepository.list(workspaceId)).length, 1);
 });
 
 test("production TokenU runtime rejects an enabled managed connection encrypted under another master key", async (t) => {

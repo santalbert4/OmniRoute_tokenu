@@ -2,10 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { GET } from "@/app/api/v1/tokenu/usage/route";
-import { createApiKey } from "@/lib/db/apiKeys";
 import { getTokenURuntimeComposition } from "@/tokenu/runtime/tokenuRuntimeComposition";
-
-process.env.API_KEY_SECRET ??= "tokenu-p4e-test-secret-0123456789abcdef0123456789abcdef";
 
 function usageRequest(apiKey: string, query = "period=2026-09"): Request {
   return new Request(`http://localhost/api/v1/tokenu/usage?${query}`, {
@@ -52,11 +49,33 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     assignedAt: "2026-09-09T00:03:00.000Z",
   });
 
-  const keyA = await createApiKey("TokenU P4E A", "machine-p4e-a");
+  const keyA = await runtime.tokenUApiKeyService.create({
+    name: "TokenU P7C A",
+    createdAt: "2026-09-09T00:03:10.000Z",
+  });
 
-  const keyB = await createApiKey("TokenU P4E B", "machine-p4e-b");
+  const keyB = await runtime.tokenUApiKeyService.create({
+    name: "TokenU P7C B",
+    createdAt: "2026-09-09T00:03:20.000Z",
+  });
 
-  const unassignedKey = await createApiKey("TokenU P4E unassigned", "machine-p4e-unassigned");
+  const unassignedKey = await runtime.tokenUApiKeyService.create({
+    name: "TokenU P7C unassigned",
+    createdAt: "2026-09-09T00:03:30.000Z",
+  });
+
+  const revokedKey = await runtime.tokenUApiKeyService.create({
+    name: "TokenU P7C revoked",
+    createdAt: "2026-09-09T00:03:40.000Z",
+  });
+
+  await runtime.tokenUApiKeyService.revoke(revokedKey.id, "2026-09-09T00:03:50.000Z");
+
+  const expiredKey = await runtime.tokenUApiKeyService.create({
+    name: "TokenU P7C expired",
+    createdAt: "2020-01-01T00:00:00.000Z",
+    expiresAt: "2020-01-02T00:00:00.000Z",
+  });
 
   await runtime.workspacePrincipalRepository.save({
     workspaceId: workspaceA,
@@ -70,6 +89,20 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     principalType: "api_key",
     principalId: keyB.id,
     assignedAt: "2026-09-09T00:05:00.000Z",
+  });
+
+  await runtime.workspacePrincipalRepository.save({
+    workspaceId: workspaceA,
+    principalType: "api_key",
+    principalId: revokedKey.id,
+    assignedAt: "2026-09-09T00:05:10.000Z",
+  });
+
+  await runtime.workspacePrincipalRepository.save({
+    workspaceId: workspaceA,
+    principalType: "api_key",
+    principalId: expiredKey.id,
+    assignedAt: "2026-09-09T00:05:20.000Z",
   });
 
   await runtime.workspaceRequestUsageRepository.increment(workspaceA, period);
@@ -130,7 +163,7 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     createdAt: "2026-09-09T11:00:00.000Z",
   });
 
-  const responseA = await GET(usageRequest(keyA.key));
+  const responseA = await GET(usageRequest(keyA.token));
 
   assert.equal(responseA.status, 200);
 
@@ -171,7 +204,7 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     ],
   });
 
-  const responseB = await GET(usageRequest(keyB.key));
+  const responseB = await GET(usageRequest(keyB.token));
 
   assert.equal(responseB.status, 200);
 
@@ -213,7 +246,7 @@ test("production TokenU usage route isolates real API keys by persistent workspa
   });
 
   const overrideAttempt = await GET(
-    usageRequest(keyA.key, "period=2026-09&workspaceId=workspace-p4e-b")
+    usageRequest(keyA.token, "period=2026-09&workspaceId=workspace-p4e-b")
   );
 
   assert.equal(overrideAttempt.status, 400);
@@ -225,7 +258,7 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     },
   });
 
-  const unassignedResponse = await GET(usageRequest(unassignedKey.key));
+  const unassignedResponse = await GET(usageRequest(unassignedKey.token));
 
   assert.equal(unassignedResponse.status, 403);
 
@@ -233,6 +266,28 @@ test("production TokenU usage route isolates real API keys by persistent workspa
     error: {
       code: "workspace_not_assigned",
       message: "API key is not assigned to a TokenU workspace",
+    },
+  });
+
+  const revokedResponse = await GET(usageRequest(revokedKey.token));
+
+  assert.equal(revokedResponse.status, 401);
+
+  assert.deepEqual(await revokedResponse.json(), {
+    error: {
+      code: "unauthorized",
+      message: "Unauthorized",
+    },
+  });
+
+  const expiredResponse = await GET(usageRequest(expiredKey.token));
+
+  assert.equal(expiredResponse.status, 401);
+
+  assert.deepEqual(await expiredResponse.json(), {
+    error: {
+      code: "unauthorized",
+      message: "Unauthorized",
     },
   });
 

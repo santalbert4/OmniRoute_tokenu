@@ -1,26 +1,38 @@
 import type { WorkspacePrincipalRepository } from "@/tokenu/runtime/workspacePrincipalRepository";
 
-export type TokenUTenantAuthFailureCode = "unauthorized" | "workspace_not_assigned";
-
 export type TokenUTenantAuthResult =
   | {
       readonly ok: true;
+
       readonly principalId: string;
+
       readonly workspaceId: string;
     }
   | {
       readonly ok: false;
+
       readonly status: 401 | 403;
-      readonly code: TokenUTenantAuthFailureCode;
+
+      readonly code: "unauthorized" | "workspace_not_assigned";
+
       readonly message: string;
     };
 
 export interface TokenUTenantAuthDependencies {
-  readonly validateApiKey: (apiKey: string) => Promise<boolean>;
+  /**
+   * Resolve raw TokenU bearer material to its persistent TokenU API-key id.
+   *
+   * Credential validation, revocation and expiration belong behind this
+   * dependency. The raw bearer token must never become a principal id.
+   */
+  readonly resolveApiKeyPrincipalId: (apiKey: string) => Promise<string | null>;
 
-  readonly getApiKeyPrincipalId: (apiKey: string) => Promise<string | null>;
-
-  readonly workspacePrincipalRepository: Pick<WorkspacePrincipalRepository, "get">;
+  /**
+   * Authoritative tenant binding.
+   *
+   * Public requests never provide or override workspace identity.
+   */
+  readonly workspacePrincipalRepository: WorkspacePrincipalRepository;
 }
 
 function extractBearerToken(request: Request): string | null {
@@ -42,12 +54,6 @@ function unauthorized(): TokenUTenantAuthResult {
   };
 }
 
-/**
- * Shared TokenU tenant-authentication boundary.
- *
- * Workspace identity is resolved only from a validated TokenU principal
- * binding. The bearer secret itself is never treated as workspace identity.
- */
 export async function resolveTokenUTenantAuth(
   request: Request,
   dependencies: TokenUTenantAuthDependencies
@@ -58,15 +64,9 @@ export async function resolveTokenUTenantAuth(
     return unauthorized();
   }
 
-  const valid = await dependencies.validateApiKey(apiKey);
+  const principalId = await dependencies.resolveApiKeyPrincipalId(apiKey);
 
-  if (!valid) {
-    return unauthorized();
-  }
-
-  const principalId = await dependencies.getApiKeyPrincipalId(apiKey);
-
-  if (!principalId || principalId === "env-key") {
+  if (!principalId?.trim()) {
     return unauthorized();
   }
 
