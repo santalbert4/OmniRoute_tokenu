@@ -1,9 +1,9 @@
 export interface CostLedgerEntry {
-  readonly id: string;
-
   readonly workspaceId: string;
 
   readonly requestId: string;
+
+  readonly attemptId: string;
 
   readonly providerId: string;
 

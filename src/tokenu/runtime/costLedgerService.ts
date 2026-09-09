@@ -1,7 +1,7 @@
-import type { ExecutionUsageRecord } from "@/tokenu/contracts/executionUsageRecord";
-import type { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
-import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
 import type { CostLedgerRecordResult } from "@/tokenu/contracts/costLedgerRecordResult";
+import type { ExecutionUsageRecord } from "@/tokenu/contracts/executionUsageRecord";
+import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
+import type { ExecutionCostCalculator } from "@/tokenu/runtime/executionCostCalculator";
 
 export class CostLedgerService {
   constructor(
@@ -12,7 +12,6 @@ export class CostLedgerService {
   async recordExecution(
     record: ExecutionUsageRecord & {
       workspaceId: string;
-      id: string;
     }
   ): Promise<CostLedgerRecordResult> {
     const cost = await this.costCalculator.calculate(record);
@@ -21,14 +20,14 @@ export class CostLedgerService {
       return {
         recorded: false,
         cost: 0,
-        entryId: record.id,
+        entryId: record.attemptId,
       };
     }
 
-    await this.ledgerRepository.append({
-      id: record.id,
+    const recorded = await this.ledgerRepository.append({
       workspaceId: record.workspaceId,
       requestId: record.requestId,
+      attemptId: record.attemptId,
       providerId: cost.providerId,
       modelId: cost.modelId,
       currency: cost.currency,
@@ -40,9 +39,9 @@ export class CostLedgerService {
     });
 
     return {
-      recorded: true,
-      cost: cost.totalCost,
-      entryId: record.id,
+      recorded,
+      cost: recorded ? cost.totalCost : 0,
+      entryId: record.attemptId,
     };
   }
 }

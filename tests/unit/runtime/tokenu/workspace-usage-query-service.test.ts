@@ -55,9 +55,9 @@ test("workspace usage query composes authoritative usage sources", async () => {
   });
 
   await ledgerRepository.append({
-    id: "ledger-1",
     workspaceId: "workspace-1",
     requestId: "request-1",
+    attemptId: "request-1-attempt",
     providerId: "groq",
     modelId: "model-a",
     currency: "USD",
@@ -69,9 +69,9 @@ test("workspace usage query composes authoritative usage sources", async () => {
   });
 
   await ledgerRepository.append({
-    id: "ledger-2",
     workspaceId: "workspace-1",
     requestId: "request-2",
+    attemptId: "request-2-attempt",
     providerId: "openai",
     modelId: "model-b",
     currency: "USD",

@@ -1,16 +1,14 @@
+import type { UsageBudget } from "@/tokenu/contracts/usageBudget";
 import type { WorkspaceSpendSummary } from "@/tokenu/contracts/workspaceSpendSummary";
 import type { CostLedgerRepository } from "@/tokenu/runtime/costLedgerRepository";
-import type { UsageBudget } from "@/tokenu/contracts/usageBudget";
 
 export class WorkspaceSpendAggregatorService {
   constructor(private readonly ledgerRepository: CostLedgerRepository) {}
 
   async summarize(budget: UsageBudget, period: string): Promise<WorkspaceSpendSummary> {
-    const workspaceEntries = await this.ledgerRepository.list(budget.workspaceId);
+    const totals = await this.ledgerRepository.periodTotals(budget.workspaceId, period);
 
-    const entries = workspaceEntries.filter((entry) => entry.createdAt.slice(0, 7) === period);
-
-    const currencyMismatch = entries.find((entry) => entry.currency !== budget.currency);
+    const currencyMismatch = totals.find((total) => total.currency !== budget.currency);
 
     if (currencyMismatch) {
       throw new Error(
@@ -18,7 +16,11 @@ export class WorkspaceSpendAggregatorService {
       );
     }
 
-    const totalCost = Number(entries.reduce((total, entry) => total + entry.cost, 0).toFixed(6));
+    const authoritativeTotal = totals.find((total) => total.currency === budget.currency);
+
+    const executionCount = authoritativeTotal?.executionCount ?? 0;
+
+    const totalCost = authoritativeTotal?.totalCost ?? 0;
 
     const remaining = Math.max(budget.monthlyLimit - totalCost, 0);
 
@@ -28,7 +30,7 @@ export class WorkspaceSpendAggregatorService {
     return {
       workspaceId: budget.workspaceId,
       period,
-      executionCount: entries.length,
+      executionCount,
       totalCost,
       monthlyLimit: budget.monthlyLimit,
       remaining,

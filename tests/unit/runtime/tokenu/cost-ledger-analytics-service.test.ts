@@ -8,9 +8,9 @@ test("cost ledger analytics ranks providers and models", () => {
 
   const analytics = service.analyze([
     {
-      id: "1",
       workspaceId: "workspace-1",
       requestId: "r1",
+      attemptId: "r1-attempt",
       providerId: "groq",
       modelId: "llama-test",
       currency: "USD",
@@ -21,9 +21,9 @@ test("cost ledger analytics ranks providers and models", () => {
       createdAt: "2026-09-08T12:00:00.000Z",
     },
     {
-      id: "2",
       workspaceId: "workspace-1",
       requestId: "r2",
+      attemptId: "r2-attempt",
       providerId: "openai",
       modelId: "gpt-test",
       currency: "USD",

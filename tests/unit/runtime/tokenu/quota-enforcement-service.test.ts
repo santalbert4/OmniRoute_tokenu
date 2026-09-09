@@ -9,9 +9,9 @@ test("cost quota uses workspace id rather than plan id", async () => {
   const repository = new InMemoryCostLedgerRepository();
 
   await repository.append({
-    id: "entry-1",
     workspaceId: "workspace-1",
     requestId: "request-1",
+    attemptId: "request-1-attempt",
     providerId: "openai",
     modelId: "gpt-5",
     currency: "USD",
@@ -43,9 +43,9 @@ test("cost quota ignores another workspace and previous periods", async () => {
   const repository = new InMemoryCostLedgerRepository();
 
   await repository.append({
-    id: "entry-old",
     workspaceId: "workspace-1",
     requestId: "request-old",
+    attemptId: "request-old-attempt",
     providerId: "openai",
     modelId: "gpt-5",
     currency: "USD",
@@ -57,9 +57,9 @@ test("cost quota ignores another workspace and previous periods", async () => {
   });
 
   await repository.append({
-    id: "entry-other",
     workspaceId: "workspace-2",
     requestId: "request-other",
+    attemptId: "request-other-attempt",
     providerId: "openai",
     modelId: "gpt-5",
     currency: "USD",
