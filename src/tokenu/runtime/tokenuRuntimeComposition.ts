@@ -22,6 +22,7 @@ import { QuotaEnforcementService } from "@/tokenu/runtime/quotaEnforcementServic
 import { RequestAdmissionService } from "@/tokenu/runtime/requestAdmissionService";
 import { RequestQuotaEnforcementService } from "@/tokenu/runtime/requestQuotaEnforcementService";
 import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
+import { TenantExecutionEventSinkFactory } from "@/tokenu/runtime/tenantExecutionEventSinkFactory";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
 import type { WorkspacePlanRepository } from "@/tokenu/runtime/workspacePlanRepository";
 import { WorkspacePlanResolverService } from "@/tokenu/runtime/workspacePlanResolverService";
@@ -58,6 +59,8 @@ export interface TokenURuntimeComposition {
   readonly executionCostCalculator: ExecutionCostCalculator;
 
   readonly costLedgerService: CostLedgerService;
+
+  readonly tenantExecutionEventSinkFactory: TenantExecutionEventSinkFactory;
 
   readonly workspacePlanResolverService: WorkspacePlanResolverService;
 
@@ -106,6 +109,8 @@ export function createTokenURuntimeComposition(
   const executionCostCalculator = new ExecutionCostCalculator(providerPricingRepository);
 
   const costLedgerService = new CostLedgerService(executionCostCalculator, costLedgerRepository);
+
+  const tenantExecutionEventSinkFactory = new TenantExecutionEventSinkFactory(costLedgerService);
 
   const workspacePlanResolverService = new WorkspacePlanResolverService(
     workspacePlanAssignmentRepository,
@@ -163,6 +168,7 @@ export function createTokenURuntimeComposition(
     providerPricingRepository,
     executionCostCalculator,
     costLedgerService,
+    tenantExecutionEventSinkFactory,
     workspacePlanResolverService,
     workspaceSpendAggregatorService,
     costQuotaEnforcementService,

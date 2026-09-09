@@ -286,6 +286,8 @@ test("TokenU runtime composition getter returns one singleton instance", () => {
 
   assert.equal(first.costLedgerRepository, second.costLedgerRepository);
 
+  assert.equal(first.tenantExecutionEventSinkFactory, second.tenantExecutionEventSinkFactory);
+
   assert.equal(first.tenantExecutionPreflightService, second.tenantExecutionPreflightService);
 
   assert.equal(first.requestAdmissionService, second.requestAdmissionService);

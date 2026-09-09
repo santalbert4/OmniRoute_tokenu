@@ -157,3 +157,91 @@ test("TokenU runtime billing uses historical persistent pricing and records auth
     cost_type: "integer",
   });
 });
+
+test("TokenU runtime tenant event pipeline bills through persistent composition", async (t) => {
+  const db = createDatabase();
+
+  t.after(() => db.close());
+
+  const runtime = createTokenURuntimeComposition(asTokenUDatabase(db));
+
+  await runtime.workspaceRepository.save({
+    id: "workspace-pipeline",
+    createdAt: "2026-09-01T00:00:00.000Z",
+  });
+
+  await runtime.providerPricingRepository.save({
+    providerId: "groq",
+    modelId: "llama-pipeline-test",
+    currency: "USD",
+    inputTokenPricePerMillion: 1,
+    outputTokenPricePerMillion: 2,
+    effectiveFrom: "2026-09-01T00:00:00.000Z",
+  });
+
+  const sink = runtime.tenantExecutionEventSinkFactory.create("workspace-pipeline");
+
+  await sink.emit({
+    type: "attempt-completed",
+    context: {
+      requestId: "request-pipeline",
+      attemptId: "attempt-pipeline",
+      sequence: 1,
+      target: {
+        providerId: "groq",
+        modelOfferingId: "groq:pipeline-test",
+        upstreamModelId: "llama-pipeline-test",
+        connectionId: "groq-pipeline",
+        credentialMode: "TOKENU_MANAGED",
+        technicalProfileId: "groq-pipeline-profile",
+        adapterId: "groq-openai",
+        endpointProfileId: "default",
+        serviceRegion: null,
+      },
+      startedAt: "2026-09-09T12:00:00.000Z",
+      retryNumber: 0,
+    },
+    result: {
+      requestId: "request-pipeline",
+      attemptId: "attempt-pipeline",
+      target: {
+        providerId: "groq",
+        modelOfferingId: "groq:pipeline-test",
+        upstreamModelId: "llama-pipeline-test",
+        connectionId: "groq-pipeline",
+        credentialMode: "TOKENU_MANAGED",
+        technicalProfileId: "groq-pipeline-profile",
+        adapterId: "groq-openai",
+        endpointProfileId: "default",
+        serviceRegion: null,
+      },
+      output: null,
+      usage: {
+        inputTokens: 1000,
+        outputTokens: 500,
+        reasoningTokens: null,
+        cacheReadTokens: null,
+        cacheWriteTokens: null,
+        totalTokens: 1500,
+      },
+      timing: {
+        startedAt: "2026-09-09T12:00:00.000Z",
+        completedAt: "2026-09-09T12:00:01.000Z",
+        durationMs: 1000,
+        timeToFirstByteMs: null,
+      },
+      status: "succeeded",
+      error: null,
+      retryability: "not-retryable",
+      interruption: "none",
+    },
+  });
+
+  const entries = await runtime.costLedgerRepository.list("workspace-pipeline");
+
+  assert.equal(entries.length, 1);
+
+  assert.equal(entries[0]?.attemptId, "attempt-pipeline");
+
+  assert.ok(Math.abs((entries[0]?.cost ?? 0) - 0.002) < 1e-12);
+});
