@@ -1,5 +1,6 @@
 import { SqliteCostLedgerRepository } from "@/tokenu/adapters/storage/sqliteCostLedgerRepository";
 import { SqliteTokenUApiKeyRepository } from "@/tokenu/adapters/storage/sqliteTokenUApiKeyRepository";
+import { SqliteTokenUUserRepository } from "@/tokenu/adapters/storage/sqliteTokenUUserRepository";
 import type { RetryPolicy } from "@/tokenu/contracts/retryPolicy";
 import { SqliteProviderPricingRepository } from "@/tokenu/adapters/storage/sqliteProviderPricingRepository";
 import { SqliteProviderUsageRepository } from "@/tokenu/adapters/storage/sqliteProviderUsageRepository";
@@ -8,6 +9,8 @@ import { SqliteWorkspacePlanAssignmentRepository } from "@/tokenu/adapters/stora
 import { SqliteWorkspacePlanRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePlanRepository";
 import { SqliteWorkspacePrincipalRepository } from "@/tokenu/adapters/storage/sqliteWorkspacePrincipalRepository";
 import { SqliteWorkspaceApiKeyProvisioningRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceApiKeyProvisioningRepository";
+import { SqliteWorkspaceMembershipRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceMembershipRepository";
+import { SqliteWorkspaceOwnerOnboardingRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceOwnerOnboardingRepository";
 import { SqliteWorkspaceRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceRepository";
 import { SqliteWorkspaceRequestUsageRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceRequestUsageRepository";
 import { SqliteWorkspaceUsageMeteringRepository } from "@/tokenu/adapters/storage/sqliteWorkspaceUsageMeteringRepository";
@@ -47,10 +50,14 @@ import { TenantExecutionOrchestrator } from "@/tokenu/runtime/tenantExecutionOrc
 import { TenantExecutionPreflightService } from "@/tokenu/runtime/tenantExecutionPreflightService";
 import type { TechnicalModelProfileRegistry } from "@/tokenu/runtime/technicalModelProfileRegistry";
 import type { TokenUApiKeyRepository } from "@/tokenu/runtime/tokenUApiKeyRepository";
+import type { TokenUUserRepository } from "@/tokenu/runtime/tokenUUserRepository";
 import { TokenUApiKeyService } from "@/tokenu/runtime/tokenUApiKeyService";
 import { WorkspaceApiKeyManagementService } from "@/tokenu/runtime/workspaceApiKeyManagementService";
+import { WorkspaceControlPlaneContextService } from "@/tokenu/runtime/workspaceControlPlaneContextService";
 import type { UsageProjectionRepository } from "@/tokenu/runtime/usageProjectionRepository";
 import { UsageProjectionService } from "@/tokenu/runtime/usageProjectionService";
+import type { WorkspaceMembershipRepository } from "@/tokenu/runtime/workspaceMembershipRepository";
+import type { WorkspaceOwnerOnboardingRepository } from "@/tokenu/runtime/workspaceOwnerOnboardingRepository";
 import type { WorkspacePlanAssignmentRepository } from "@/tokenu/runtime/workspacePlanAssignmentRepository";
 import type { WorkspacePlanRepository } from "@/tokenu/runtime/workspacePlanRepository";
 import { WorkspacePlanResolverService } from "@/tokenu/runtime/workspacePlanResolverService";
@@ -98,6 +105,14 @@ export interface TokenURuntimeComposition {
   readonly database: TokenUSqliteDatabase;
 
   readonly workspaceRepository: WorkspaceRepository;
+
+  readonly tokenUUserRepository: TokenUUserRepository;
+
+  readonly workspaceMembershipRepository: WorkspaceMembershipRepository;
+
+  readonly workspaceOwnerOnboardingRepository: WorkspaceOwnerOnboardingRepository;
+
+  readonly workspaceControlPlaneContextService: WorkspaceControlPlaneContextService;
 
   readonly workspacePrincipalRepository: WorkspacePrincipalRepository;
 
@@ -181,6 +196,18 @@ export function createTokenURuntimeComposition(
   options: TokenURuntimeCompositionOptions = {}
 ): TokenURuntimeComposition {
   const workspaceRepository = new SqliteWorkspaceRepository(database);
+
+  const tokenUUserRepository = new SqliteTokenUUserRepository(database);
+
+  const workspaceMembershipRepository = new SqliteWorkspaceMembershipRepository(database);
+
+  const workspaceOwnerOnboardingRepository = new SqliteWorkspaceOwnerOnboardingRepository(database);
+
+  const workspaceControlPlaneContextService = new WorkspaceControlPlaneContextService(
+    tokenUUserRepository,
+    workspaceRepository,
+    workspaceMembershipRepository
+  );
 
   const workspacePrincipalRepository = new SqliteWorkspacePrincipalRepository(database);
 
@@ -315,6 +342,10 @@ export function createTokenURuntimeComposition(
   return {
     database,
     workspaceRepository,
+    tokenUUserRepository,
+    workspaceMembershipRepository,
+    workspaceOwnerOnboardingRepository,
+    workspaceControlPlaneContextService,
     workspacePrincipalRepository,
     tokenUApiKeyRepository,
     tokenUApiKeyService,
