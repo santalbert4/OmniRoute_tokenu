@@ -114,6 +114,74 @@ test("TokenU API-key service returns raw token once while persisting hash only",
   assert.equal(JSON.stringify(stored).includes(TOKEN_A), false);
 });
 
+test("TokenU API-key service exposes safe metadata without credential verification material", async () => {
+  const repository = new MemoryRepository();
+
+  const apiKeys = new TokenUApiKeyService(repository, {
+    generateId: () => "metadata-key",
+    generateToken: () => TOKEN_A,
+    now: () => "2026-09-10T00:00:00.000Z",
+  });
+
+  const created = await apiKeys.create({
+    name: " Metadata key ",
+    expiresAt: "2026-09-12T00:00:00.000Z",
+  });
+
+  const active = await apiKeys.getMetadata(created.id, "2026-09-11T00:00:00.000Z");
+
+  assert.deepEqual(active, {
+    id: "metadata-key",
+    name: "Metadata key",
+    keyPrefix: "tku_AAAAAAAA",
+    createdAt: "2026-09-10T00:00:00.000Z",
+    expiresAt: "2026-09-12T00:00:00.000Z",
+    revokedAt: null,
+    lastUsedAt: null,
+    status: "active",
+  });
+
+  assert.equal(Object.prototype.hasOwnProperty.call(active, "keyHash"), false);
+
+  assert.equal(Object.prototype.hasOwnProperty.call(active, "token"), false);
+
+  assert.equal(JSON.stringify(active).includes(TOKEN_A), false);
+
+  assert.equal(repository.touchCalls.length, 0);
+
+  const expired = await apiKeys.getMetadata(created.id, "2026-09-12T00:00:00.000Z");
+
+  assert.equal(expired?.status, "expired");
+
+  assert.equal(await apiKeys.revoke(created.id, "2026-09-13T00:00:00.000Z"), true);
+
+  const revoked = await apiKeys.getMetadata(created.id, "2026-09-14T00:00:00.000Z");
+
+  assert.equal(revoked?.status, "revoked");
+
+  assert.equal(revoked?.revokedAt, "2026-09-13T00:00:00.000Z");
+
+  assert.equal(repository.touchCalls.length, 0);
+
+  assert.equal(await apiKeys.getMetadata("missing-key", "2026-09-14T00:00:00.000Z"), null);
+
+  assert.equal(await apiKeys.getMetadata(" ", "2026-09-14T00:00:00.000Z"), null);
+});
+
+test("TokenU API-key metadata rejects an invalid evaluation timestamp for an existing credential", async () => {
+  const repository = new MemoryRepository();
+  const apiKeys = service(repository);
+
+  await apiKeys.create({
+    name: "Production",
+  });
+
+  await assert.rejects(
+    apiKeys.getMetadata("tokenu-key-a", "not-a-date"),
+    /Invalid TokenU API key evaluatedAt/
+  );
+});
+
 test("TokenU API-key service resolves only exact active TokenU credential identity", async () => {
   const repository = new MemoryRepository();
   const apiKeys = service(repository);
@@ -265,6 +333,55 @@ test("TokenU API-key service refuses an invalid token generator", async () => {
       name: "A",
     }),
     /generator returned invalid token/
+  );
+
+  assert.equal(repository.records.size, 0);
+});
+
+test("TokenU API-key service returns raw bearer only after controlled persistence succeeds", async () => {
+  const repository = new MemoryRepository();
+  const apiKeys = service(repository);
+
+  let persisted: TokenUApiKey | undefined;
+
+  const created = await apiKeys.createWithPersistence(
+    {
+      name: "Atomic",
+    },
+    async (apiKey) => {
+      persisted = apiKey;
+    }
+  );
+
+  assert.ok(persisted);
+
+  assert.equal(persisted.id, "tokenu-key-a");
+
+  assert.equal(persisted.keyHash, hashTokenUApiKey(TOKEN_A));
+
+  assert.equal(JSON.stringify(persisted).includes(TOKEN_A), false);
+
+  assert.equal(repository.records.size, 0);
+
+  assert.equal(created.token, TOKEN_A);
+
+  assert.equal(created.keyPrefix, "tku_AAAAAAAA");
+});
+
+test("TokenU API-key service does not return a credential when controlled persistence fails", async () => {
+  const repository = new MemoryRepository();
+  const apiKeys = service(repository);
+
+  await assert.rejects(
+    apiKeys.createWithPersistence(
+      {
+        name: "Atomic failure",
+      },
+      async () => {
+        throw new Error("simulated atomic persistence failure");
+      }
+    ),
+    /simulated atomic persistence failure/
   );
 
   assert.equal(repository.records.size, 0);

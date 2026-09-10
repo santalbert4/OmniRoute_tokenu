@@ -66,6 +66,45 @@ export class SqliteWorkspacePrincipalRepository implements WorkspacePrincipalRep
     };
   }
 
+  async listByWorkspace(workspaceId: string): Promise<readonly TokenUWorkspacePrincipal[]> {
+    if (!workspaceId.trim()) {
+      return [];
+    }
+
+    const statement = this.db.prepare(
+      `SELECT
+         workspace_id,
+         principal_type,
+         principal_id,
+         assigned_at
+       FROM tokenu_workspace_principals
+       WHERE workspace_id = ?
+       ORDER BY
+         assigned_at ASC,
+         principal_type ASC,
+         principal_id ASC`
+    );
+
+    if (typeof statement.all !== "function") {
+      throw new Error("TokenU SQLite statement does not support row enumeration");
+    }
+
+    const rows = statement.all(workspaceId);
+
+    return rows.map((row) => {
+      if (!isWorkspacePrincipalRow(row)) {
+        throw new Error("Invalid TokenU workspace principal row");
+      }
+
+      return {
+        workspaceId: row.workspace_id,
+        principalType: row.principal_type,
+        principalId: row.principal_id,
+        assignedAt: row.assigned_at,
+      };
+    });
+  }
+
   async save(binding: TokenUWorkspacePrincipal): Promise<void> {
     this.db
       .prepare(

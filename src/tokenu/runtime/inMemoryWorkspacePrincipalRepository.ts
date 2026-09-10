@@ -14,6 +14,21 @@ export class InMemoryWorkspacePrincipalRepository implements WorkspacePrincipalR
     return this.bindings.get(this.key(principalType, principalId)) ?? null;
   }
 
+  async listByWorkspace(workspaceId: string): Promise<readonly TokenUWorkspacePrincipal[]> {
+    if (!workspaceId.trim()) {
+      return [];
+    }
+
+    return [...this.bindings.values()]
+      .filter((binding) => binding.workspaceId === workspaceId)
+      .sort(
+        (left, right) =>
+          left.assignedAt.localeCompare(right.assignedAt) ||
+          left.principalType.localeCompare(right.principalType) ||
+          left.principalId.localeCompare(right.principalId)
+      );
+  }
+
   async save(binding: TokenUWorkspacePrincipal): Promise<void> {
     const key = this.key(binding.principalType, binding.principalId);
 

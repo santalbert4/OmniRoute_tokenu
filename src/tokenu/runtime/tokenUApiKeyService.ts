@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 
 import type { TokenUApiKey } from "@/tokenu/contracts/tokenUApiKey";
+import type {
+  TokenUApiKeyMetadata,
+  TokenUApiKeyStatus,
+} from "@/tokenu/contracts/tokenUApiKeyMetadata";
 import {
   generateTokenUApiKey,
   getTokenUApiKeyDisplayPrefix,
@@ -70,6 +74,19 @@ export class TokenUApiKeyService {
   }
 
   async create(input: CreateTokenUApiKeyInput): Promise<CreatedTokenUApiKey> {
+    return this.createWithPersistence(input, (apiKey) => this.repository.save(apiKey));
+  }
+
+  /**
+   * Internal persistence seam used when credential creation must participate
+   * in a larger atomic persistence operation.
+   *
+   * Raw bearer material is returned only after persist() resolves.
+   */
+  async createWithPersistence(
+    input: CreateTokenUApiKeyInput,
+    persist: (apiKey: TokenUApiKey) => Promise<void>
+  ): Promise<CreatedTokenUApiKey> {
     const name = input.name.trim();
 
     if (!name) {
@@ -100,6 +117,7 @@ export class TokenUApiKeyService {
     }
 
     const keyPrefix = getTokenUApiKeyDisplayPrefix(token);
+
     const keyHash = hashTokenUApiKey(token);
 
     const apiKey: TokenUApiKey = {
@@ -113,7 +131,7 @@ export class TokenUApiKeyService {
       lastUsedAt: null,
     };
 
-    await this.repository.save(apiKey);
+    await persist(apiKey);
 
     return {
       id,
@@ -122,6 +140,45 @@ export class TokenUApiKeyService {
       keyPrefix,
       createdAt,
       expiresAt,
+    };
+  }
+
+  async getMetadata(
+    apiKeyId: string,
+    evaluatedAt: string = this.now()
+  ): Promise<TokenUApiKeyMetadata | null> {
+    if (!apiKeyId.trim()) {
+      return null;
+    }
+
+    const apiKey = await this.repository.getById(apiKeyId);
+
+    if (apiKey === null) {
+      return null;
+    }
+
+    const evaluatedTimestamp = normalizeTimestamp(evaluatedAt, "evaluatedAt");
+
+    let status: TokenUApiKeyStatus = "active";
+
+    if (apiKey.revokedAt !== null) {
+      status = "revoked";
+    } else if (
+      apiKey.expiresAt !== null &&
+      Date.parse(apiKey.expiresAt) <= Date.parse(evaluatedTimestamp)
+    ) {
+      status = "expired";
+    }
+
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      keyPrefix: apiKey.keyPrefix,
+      createdAt: apiKey.createdAt,
+      expiresAt: apiKey.expiresAt,
+      revokedAt: apiKey.revokedAt,
+      lastUsedAt: apiKey.lastUsedAt,
+      status,
     };
   }
 

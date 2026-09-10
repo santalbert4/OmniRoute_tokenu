@@ -173,3 +173,73 @@ test("SQLite principal repository rejects a missing TokenU workspace", async (t)
     /tokenu_workspace_not_found/
   );
 });
+
+test("SQLite principal repository enumerates only one workspace in deterministic order", async (t) => {
+  const db = createDatabase();
+  t.after(() => db.close());
+
+  const database = asTokenUDatabase(db);
+
+  const workspaceRepository = new SqliteWorkspaceRepository(database);
+
+  const principalRepository = new SqliteWorkspacePrincipalRepository(database);
+
+  await workspaceRepository.save({
+    id: "workspace-a",
+    createdAt: "2026-09-10T00:00:00.000Z",
+  });
+
+  await workspaceRepository.save({
+    id: "workspace-b",
+    createdAt: "2026-09-10T00:00:00.000Z",
+  });
+
+  await principalRepository.save({
+    workspaceId: "workspace-a",
+    principalType: "api_key",
+    principalId: "key-a-later",
+    assignedAt: "2026-09-10T00:03:00.000Z",
+  });
+
+  await principalRepository.save({
+    workspaceId: "workspace-b",
+    principalType: "api_key",
+    principalId: "key-b",
+    assignedAt: "2026-09-10T00:01:00.000Z",
+  });
+
+  await principalRepository.save({
+    workspaceId: "workspace-a",
+    principalType: "api_key",
+    principalId: "key-a-first",
+    assignedAt: "2026-09-10T00:02:00.000Z",
+  });
+
+  assert.deepEqual(await principalRepository.listByWorkspace("workspace-a"), [
+    {
+      workspaceId: "workspace-a",
+      principalType: "api_key",
+      principalId: "key-a-first",
+      assignedAt: "2026-09-10T00:02:00.000Z",
+    },
+    {
+      workspaceId: "workspace-a",
+      principalType: "api_key",
+      principalId: "key-a-later",
+      assignedAt: "2026-09-10T00:03:00.000Z",
+    },
+  ]);
+
+  assert.deepEqual(await principalRepository.listByWorkspace("workspace-b"), [
+    {
+      workspaceId: "workspace-b",
+      principalType: "api_key",
+      principalId: "key-b",
+      assignedAt: "2026-09-10T00:01:00.000Z",
+    },
+  ]);
+
+  assert.deepEqual(await principalRepository.listByWorkspace("workspace-missing"), []);
+
+  assert.deepEqual(await principalRepository.listByWorkspace(" "), []);
+});
